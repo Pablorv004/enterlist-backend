@@ -1,0 +1,195 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  user_id             String          @id @db.Uuid
+  username            String          @unique @db.VarChar
+  email               String          @unique @db.VarChar
+  password_hash       String?
+  oauth_provider      String?         @db.VarChar
+  oauth_id            String?         @db.VarChar
+  role                user_role
+  is_active           Boolean?        @default(true)
+  created_at          DateTime        @db.Timestamptz(6)
+  updated_at          DateTime        @db.Timestamptz(6)
+  admin_actions       AdminAction[]   @relation("AdminUserActions")
+  target_user_actions AdminAction[]   @relation("UserAdminActions")
+  linked_accounts     LinkedAccount[]
+  payment_methods     PaymentMethod[]
+  playlists           Playlist[]
+  songs               Song[]
+  submissions         Submission[]    @relation("ArtistSubmissions")
+
+  @@map("users")
+}
+
+model Platform {
+  platform_id     Int             @id @default(autoincrement())
+  name            String          @unique @db.VarChar
+  linked_accounts LinkedAccount[]
+  playlists       Playlist[]
+  songs           Song[]
+
+  @@map("platforms")
+}
+
+model LinkedAccount {
+  linked_account_id String    @id @db.Uuid
+  user_id           String    @db.Uuid
+  platform_id       Int
+  external_user_id  String    @db.VarChar
+  access_token      String
+  refresh_token     String?
+  token_expires_at  DateTime? @db.Timestamptz(6)
+  created_at        DateTime  @db.Timestamptz(6)
+  platform          Platform  @relation(fields: [platform_id], references: [platform_id], onDelete: NoAction, onUpdate: NoAction)
+  user              User      @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, platform_id])
+  @@map("linked_accounts")
+}
+
+model Playlist {
+  playlist_id          String        @id @db.Uuid
+  creator_id           String        @db.Uuid
+  platform_id          Int
+  platform_specific_id String        @db.VarChar
+  name                 String        @db.VarChar
+  description          String?
+  url                  String?       @db.VarChar
+  cover_image_url      String?       @db.VarChar
+  is_visible           Boolean?      @default(true)
+  genre                String?       @db.VarChar
+  follower_count       Int?
+  created_at           DateTime      @db.Timestamptz(6)
+  updated_at           DateTime      @db.Timestamptz(6)
+  admin_actions        AdminAction[] @relation("PlaylistAdminActions")
+  creator              User          @relation(fields: [creator_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  platform             Platform      @relation(fields: [platform_id], references: [platform_id], onDelete: NoAction, onUpdate: NoAction)
+  submissions          Submission[]
+
+  @@unique([platform_id, platform_specific_id])
+  @@map("playlists")
+}
+
+model Song {
+  song_id                 String        @id @db.Uuid
+  artist_id               String        @db.Uuid
+  platform_id             Int
+  platform_specific_id    String        @db.VarChar
+  title                   String        @db.VarChar
+  artist_name_on_platform String        @db.VarChar
+  album_name              String?       @db.VarChar
+  url                     String?       @db.VarChar
+  cover_image_url         String?       @db.VarChar
+  duration_ms             Int?
+  is_visible              Boolean?      @default(true)
+  created_at              DateTime      @db.Timestamptz(6)
+  updated_at              DateTime      @db.Timestamptz(6)
+  admin_actions           AdminAction[] @relation("SongAdminActions")
+  artist                  User          @relation(fields: [artist_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  platform                Platform      @relation(fields: [platform_id], references: [platform_id], onDelete: NoAction, onUpdate: NoAction)
+  submissions             Submission[]
+
+  @@unique([platform_id, platform_specific_id])
+  @@map("songs")
+}
+
+model Submission {
+  submission_id      String            @id @db.Uuid
+  artist_id          String            @db.Uuid
+  playlist_id        String            @db.Uuid
+  song_id            String            @db.Uuid
+  status             submission_status
+  submission_message String?
+  review_feedback    String?
+  submitted_at       DateTime          @db.Timestamptz(6)
+  reviewed_at        DateTime?         @db.Timestamptz(6)
+  artist             User              @relation("ArtistSubmissions", fields: [artist_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  playlist           Playlist          @relation(fields: [playlist_id], references: [playlist_id], onDelete: NoAction, onUpdate: NoAction)
+  song               Song              @relation(fields: [song_id], references: [song_id], onDelete: NoAction, onUpdate: NoAction)
+  transaction        Transaction?
+
+  @@map("submissions")
+}
+
+model PaymentMethod {
+  payment_method_id String              @id @db.Uuid
+  artist_id         String              @db.Uuid
+  type              payment_method_type
+  provider_token    String              @db.VarChar
+  details           String              @db.VarChar
+  is_default        Boolean?            @default(false)
+  created_at        DateTime            @db.Timestamptz(6)
+  updated_at        DateTime            @db.Timestamptz(6)
+  artist            User                @relation(fields: [artist_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  transactions      Transaction[]
+
+  @@map("payment_methods")
+}
+
+model Transaction {
+  transaction_id                  String             @id @db.Uuid
+  submission_id                   String             @unique @db.Uuid
+  payment_method_id               String             @db.Uuid
+  amount_total                    Decimal            @db.Decimal(10, 2)
+  currency                        String             @db.VarChar(3)
+  platform_fee                    Decimal            @db.Decimal(10, 2)
+  creator_payout_amount           Decimal            @db.Decimal(10, 2)
+  status                          transaction_status
+  payment_provider_transaction_id String?            @db.VarChar
+  created_at                      DateTime           @db.Timestamptz(6)
+  updated_at                      DateTime           @db.Timestamptz(6)
+  payment_method                  PaymentMethod      @relation(fields: [payment_method_id], references: [payment_method_id], onDelete: NoAction, onUpdate: NoAction)
+  submission                      Submission         @relation(fields: [submission_id], references: [submission_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("transactions")
+}
+
+model AdminAction {
+  action_id          String    @id @db.Uuid
+  admin_user_id      String    @db.Uuid
+  action_type        String    @db.VarChar
+  target_user_id     String?   @db.Uuid
+  target_playlist_id String?   @db.Uuid
+  target_song_id     String?   @db.Uuid
+  reason             String?
+  action_timestamp   DateTime  @db.Timestamptz(6)
+  admin              User      @relation("AdminUserActions", fields: [admin_user_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  target_playlist    Playlist? @relation("PlaylistAdminActions", fields: [target_playlist_id], references: [playlist_id], onDelete: NoAction, onUpdate: NoAction)
+  target_song        Song?     @relation("SongAdminActions", fields: [target_song_id], references: [song_id], onDelete: NoAction, onUpdate: NoAction)
+  target_user        User?     @relation("UserAdminActions", fields: [target_user_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("admin_actions")
+}
+
+enum payment_method_type {
+  card
+  paypal
+}
+
+enum submission_status {
+  pending
+  under_review
+  approved
+  rejected
+}
+
+enum transaction_status {
+  pending
+  processing
+  succeeded
+  failed
+}
+
+enum user_role {
+  playlist_maker
+  artist
+  admin
+}
