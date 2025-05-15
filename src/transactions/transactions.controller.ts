@@ -17,7 +17,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { user_role, transaction_status } from '@prisma/client';
 
-@Controller('transactions')
+@Controller('api/transactions')
 @UseGuards(JwtAuthGuard)
 export class TransactionsController {
     constructor(private readonly transactionsService: TransactionsService) { }

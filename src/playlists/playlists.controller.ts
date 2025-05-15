@@ -18,7 +18,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { user_role } from '@prisma/client';
 
-@Controller('playlists')
+@Controller('api/playlists')
 export class PlaylistsController {
     constructor(private readonly playlistsService: PlaylistsService) { }
 

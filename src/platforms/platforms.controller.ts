@@ -16,7 +16,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { user_role } from '@prisma/client';
 
-@Controller('platforms')
+@Controller('api/platforms')
 export class PlatformsController {
     constructor(private readonly platformsService: PlatformsService) { }
 

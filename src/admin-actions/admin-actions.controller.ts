@@ -16,7 +16,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { user_role } from '@prisma/client';
 
-@Controller('admin-actions')
+@Controller('api/admin-actions')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(user_role.admin)
 export class AdminActionsController {

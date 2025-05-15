@@ -18,7 +18,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { user_role, submission_status } from '@prisma/client';
 
-@Controller('submissions')
+@Controller('api/submissions')
 export class SubmissionsController {
     constructor(private readonly submissionsService: SubmissionsService) { }
 
