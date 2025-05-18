@@ -5,7 +5,8 @@ import {
     IsInt,
     IsOptional,
     IsBoolean,
-    IsPositive
+    IsPositive,
+    IsDecimal
 } from 'class-validator';
 
 export class CreatePlaylistDto {
@@ -36,6 +37,10 @@ export class CreatePlaylistDto {
     @IsString()
     @IsOptional()
     cover_image_url?: string;
+
+    @IsDecimal()
+    @IsOptional()
+    submission_fee?: number;
 
     @IsBoolean()
     @IsOptional()
@@ -70,6 +75,10 @@ export class UpdatePlaylistDto {
     @IsBoolean()
     @IsOptional()
     is_visible?: boolean;
+
+    @IsDecimal()
+    @IsOptional()
+    submission_fee?: number;
 
     @IsString()
     @IsOptional()
