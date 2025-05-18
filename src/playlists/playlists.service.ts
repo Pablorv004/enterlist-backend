@@ -121,6 +121,7 @@ export class PlaylistsService {
             data: {
                 playlist_id: uuidv4(),
                 ...createPlaylistDto,
+                submission_fee: createPlaylistDto.submission_fee || 0,
                 created_at: new Date(),
                 updated_at: new Date(),
             },

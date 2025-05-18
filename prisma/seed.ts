@@ -100,6 +100,7 @@ async function main() {
                 name: 'Indie Discoveries',
                 description: 'The best new indie tracks each week',
                 genre: 'Indie',
+                submission_fee: 5.99,
                 follower_count: 1500,
                 is_visible: true,
                 created_at: new Date(),
