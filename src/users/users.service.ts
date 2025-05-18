@@ -9,7 +9,7 @@ export class UsersService {
     constructor(private readonly prismaService: PrismaService) { }
 
     async findAll(skip = 0, take = 10) {
-        const [users, count] = await Promise.all([
+        const [data, total] = await Promise.all([
             this.prismaService.user.findMany({
                 skip,
                 take,
@@ -27,7 +27,7 @@ export class UsersService {
             this.prismaService.user.count(),
         ]);
 
-        return { users, count, skip, take };
+        return { data, total, skip, take };
     }
 
     async findOne(id: string) {

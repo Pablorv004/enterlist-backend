@@ -8,7 +8,7 @@ export class PaymentMethodsService {
     constructor(private readonly prismaService: PrismaService) { }
 
     async findAll() {
-        return this.prismaService.paymentMethod.findMany({
+        const data = await this.prismaService.paymentMethod.findMany({
             select: {
                 payment_method_id: true,
                 artist_id: true,
@@ -25,10 +25,13 @@ export class PaymentMethodsService {
                 },
             },
         });
+        
+        const total = data.length;
+        return { data, total };
     }
 
     async findByArtist(artistId: string) {
-        const paymentMethods = await this.prismaService.paymentMethod.findMany({
+        const data = await this.prismaService.paymentMethod.findMany({
             where: { artist_id: artistId },
             select: {
                 payment_method_id: true,
@@ -39,8 +42,9 @@ export class PaymentMethodsService {
                 updated_at: true,
             },
         });
-
-        return paymentMethods;
+        
+        const total = data.length;
+        return { data, total };
     }
 
     async findOne(id: string) {

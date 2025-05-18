@@ -8,7 +8,7 @@ export class LinkedAccountsService {
     constructor(private readonly prismaService: PrismaService) { }
 
     async findAll() {
-        return this.prismaService.linkedAccount.findMany({
+        const data = await this.prismaService.linkedAccount.findMany({
             include: {
                 user: {
                     select: {
@@ -19,17 +19,19 @@ export class LinkedAccountsService {
                 platform: true,
             },
         });
+
+        return { data };
     }
 
     async findByUser(userId: string) {
-        const accounts = await this.prismaService.linkedAccount.findMany({
+        const data = await this.prismaService.linkedAccount.findMany({
             where: { user_id: userId },
             include: {
                 platform: true,
             },
         });
 
-        return accounts;
+        return { data };
     }
 
     async findOne(id: string) {

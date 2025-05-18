@@ -8,7 +8,7 @@ export class AdminActionsService {
     constructor(private readonly prismaService: PrismaService) { }
 
     async findAll(skip = 0, take = 10) {
-        const [actions, count] = await Promise.all([
+        const [data, total] = await Promise.all([
             this.prismaService.adminAction.findMany({
                 skip,
                 take,
@@ -41,11 +41,11 @@ export class AdminActionsService {
             this.prismaService.adminAction.count(),
         ]);
 
-        return { actions, count, skip, take };
+        return { data, total, skip, take };
     }
 
     async findByAdmin(adminId: string, skip = 0, take = 10) {
-        const [actions, count] = await Promise.all([
+        const [data, total] = await Promise.all([
             this.prismaService.adminAction.findMany({
                 where: { admin_user_id: adminId },
                 skip,
@@ -75,11 +75,11 @@ export class AdminActionsService {
             }),
         ]);
 
-        return { actions, count, skip, take };
+        return { data, total, skip, take };
     }
 
     async findByTarget(targetId: string, skip = 0, take = 10) {
-        const [actions, count] = await Promise.all([
+        const [data, total] = await Promise.all([
             this.prismaService.adminAction.findMany({
                 where: {
                     OR: [
@@ -127,7 +127,7 @@ export class AdminActionsService {
             }),
         ]);
 
-        return { actions, count, skip, take };
+        return { data, total, skip, take };
     }
 
     async findOne(id: string) {

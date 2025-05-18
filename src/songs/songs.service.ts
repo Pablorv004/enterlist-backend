@@ -8,7 +8,7 @@ export class SongsService {
     constructor(private readonly prismaService: PrismaService) { }
 
     async findAll(skip = 0, take = 10) {
-        const [songs, count] = await Promise.all([
+        const [data, total] = await Promise.all([
             this.prismaService.song.findMany({
                 skip,
                 take,
@@ -25,11 +25,11 @@ export class SongsService {
             this.prismaService.song.count(),
         ]);
 
-        return { songs, count, skip, take };
+        return { data, total, skip, take };
     }
 
     async findByArtist(artistId: string, skip = 0, take = 10) {
-        const [songs, count] = await Promise.all([
+        const [data, total] = await Promise.all([
             this.prismaService.song.findMany({
                 where: { artist_id: artistId },
                 skip,
@@ -43,7 +43,7 @@ export class SongsService {
             }),
         ]);
 
-        return { songs, count, skip, take };
+        return { data, total, skip, take };
     }
 
     async findOne(id: string) {

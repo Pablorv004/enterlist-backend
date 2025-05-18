@@ -7,7 +7,9 @@ export class PlatformsService {
     constructor(private readonly prismaService: PrismaService) { }
 
     async findAll() {
-        return this.prismaService.platform.findMany();
+        const data = await this.prismaService.platform.findMany();
+        const total = data.length;
+        return { data, total };
     }
 
     async findOne(id: number) {

@@ -11,7 +11,7 @@ export class TransactionsService {
     async findAll(skip = 0, take = 10, status?: transaction_status) {
         const where = status ? { status } : {};
 
-        const [transactions, count] = await Promise.all([
+        const [data, total] = await Promise.all([
             this.prismaService.transaction.findMany({
                 where,
                 skip,
@@ -52,11 +52,11 @@ export class TransactionsService {
             this.prismaService.transaction.count({ where }),
         ]);
 
-        return { transactions, count, skip, take };
+        return { data, total, skip, take };
     }
 
     async findByArtist(artistId: string, skip = 0, take = 10) {
-        const [transactions, count] = await Promise.all([
+        const [data, total] = await Promise.all([
             this.prismaService.transaction.findMany({
                 where: {
                     submission: {
@@ -102,7 +102,7 @@ export class TransactionsService {
             }),
         ]);
 
-        return { transactions, count, skip, take };
+        return { data, total, skip, take };
     }
 
     async findOne(id: string) {

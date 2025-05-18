@@ -11,7 +11,7 @@ export class SubmissionsService {
     async findAll(skip = 0, take = 10, status?: submission_status) {
         const where = status ? { status } : {};
 
-        const [submissions, count] = await Promise.all([
+        const [data, total] = await Promise.all([
             this.prismaService.submission.findMany({
                 where,
                 skip,
@@ -45,11 +45,11 @@ export class SubmissionsService {
             this.prismaService.submission.count({ where }),
         ]);
 
-        return { submissions, count, skip, take };
+        return { data, total, skip, take };
     }
 
     async findByArtist(artistId: string, skip = 0, take = 10) {
-        const [submissions, count] = await Promise.all([
+        const [data, total] = await Promise.all([
             this.prismaService.submission.findMany({
                 where: { artist_id: artistId },
                 skip,
@@ -77,11 +77,11 @@ export class SubmissionsService {
             this.prismaService.submission.count({ where: { artist_id: artistId } }),
         ]);
 
-        return { submissions, count, skip, take };
+        return { data, total, skip, take };
     }
 
     async findByPlaylist(playlistId: string, skip = 0, take = 10) {
-        const [submissions, count] = await Promise.all([
+        const [data, total] = await Promise.all([
             this.prismaService.submission.findMany({
                 where: { playlist_id: playlistId },
                 skip,
@@ -106,13 +106,13 @@ export class SubmissionsService {
             this.prismaService.submission.count({ where: { playlist_id: playlistId } }),
         ]);
 
-        return { submissions, count, skip, take };
+        return { data, total, skip, take };
     }
 
     async findByCreator(creatorId: string, skip = 0, take = 10, status?: submission_status) {
         const where = status ? { status, playlist: { creator_id: creatorId } } : { playlist: { creator_id: creatorId } };
 
-        const [submissions, count] = await Promise.all([
+        const [data, total] = await Promise.all([
             this.prismaService.submission.findMany({
                 where,
                 skip,
@@ -141,11 +141,11 @@ export class SubmissionsService {
             this.prismaService.submission.count({ where }),
         ]);
 
-        return { submissions, count, skip, take };
+        return { data, total, skip, take };
     }
 
     async findOne(id: string) {
-        const submission = await this.prismaService.submission.findUnique({
+        const data = await this.prismaService.submission.findUnique({
             where: { submission_id: id },
             include: {
                 artist: {
@@ -180,11 +180,11 @@ export class SubmissionsService {
             },
         });
 
-        if (!submission) {
+        if (!data) {
             throw new NotFoundException(`Submission with ID ${id} not found`);
         }
 
-        return submission;
+        return data;
     }
 
     async create(createSubmissionDto: CreateSubmissionDto) {
