@@ -109,6 +109,41 @@ export class SubmissionsService {
         return { submissions, count, skip, take };
     }
 
+    async findByCreator(creatorId: string, skip = 0, take = 10, status?: submission_status) {
+        const where = status ? { status, playlist: { creator_id: creatorId } } : { playlist: { creator_id: creatorId } };
+
+        const [submissions, count] = await Promise.all([
+            this.prismaService.submission.findMany({
+                where,
+                skip,
+                take,
+                include: {
+                    artist: {
+                        select: {
+                            username: true,
+                            email: true,
+                        },
+                    },
+                    playlist: {
+                        select: {
+                            name: true,
+                        },
+                    },
+                    song: {
+                        select: {
+                            title: true,
+                            artist_name_on_platform: true,
+                        },
+                    },
+                },
+                orderBy: { submitted_at: 'desc' },
+            }),
+            this.prismaService.submission.count({ where }),
+        ]);
+
+        return { submissions, count, skip, take };
+    }
+
     async findOne(id: string) {
         const submission = await this.prismaService.submission.findUnique({
             where: { submission_id: id },

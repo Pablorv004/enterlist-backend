@@ -53,6 +53,17 @@ export class SubmissionsController {
     }
 
     @UseGuards(JwtAuthGuard)
+    @Get('creator/:creatorId')
+    findByCreator(
+        @Param('creatorId') creatorId: string,
+        @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
+        @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
+        @Query('status') status?: submission_status,
+    ) {
+        return this.submissionsService.findByCreator(creatorId, skip, take, status);
+    }
+
+    @UseGuards(JwtAuthGuard)
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.submissionsService.findOne(id);
