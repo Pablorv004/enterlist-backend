@@ -5,12 +5,11 @@ import { v4 as uuidv4 } from 'uuid';
 const prisma = new PrismaClient();
 
 async function main() {
-    console.log('Starting database seed...');
-
-    const platforms = [
+    console.log('Starting database seed...');    const platforms = [
         { name: 'Spotify' },
         { name: 'SoundCloud' },
         { name: 'YouTube Music' },
+        { name: 'YouTube' },
     ];
 
     console.log('Creating platforms...');

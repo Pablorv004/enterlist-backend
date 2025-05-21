@@ -10,6 +10,8 @@ Enterlist allows artists from Spotify, SoundCloud, or YouTube to submit their so
 
 - User authentication and authorization (playlist makers, artists, admins)
 - OAuth integration with music platforms (Spotify, SoundCloud, YouTube)
+  - One-click registration and login with Spotify and YouTube
+  - Automatic account linking with Spotify and YouTube
 - Song submission workflow
 - Payment processing for submissions
 - Playlist management

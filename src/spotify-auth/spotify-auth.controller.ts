@@ -1,0 +1,62 @@
+import { Controller, Get, Query, Req, Res, UseGuards, ParseIntPipe, DefaultValuePipe } from '@nestjs/common';
+import { Response } from 'express';
+import { SpotifyAuthService } from './spotify-auth.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+
+@Controller('api/auth/spotify')
+export class SpotifyAuthController {
+    constructor(private readonly spotifyAuthService: SpotifyAuthService) { }
+
+    @Get('login')
+    @UseGuards(JwtAuthGuard)
+    async login(@Req() req, @Res() res: Response) {
+        const authUrl = await this.spotifyAuthService.getAuthorizationUrl(req.user.user_id);
+        return res.redirect(authUrl);
+    }
+
+    @Get('register-or-login')
+    async registerOrLogin(@Res() res: Response) {
+        // This endpoint doesn't require authentication as it's for new users
+        const authUrl = await this.spotifyAuthService.getAuthorizationUrl();
+        return res.redirect(authUrl);
+    }
+
+    @Get('callback')
+    async callback(
+        @Query('code') code: string,
+        @Query('state') state: string,
+        @Query('error') error: string,
+        @Res() res: Response,
+    ) {
+        if (error) {
+            return res.redirect(`/dashboard?error=${error}`);
+        }
+
+        try {
+            const result = await this.spotifyAuthService.handleCallback(code, state);
+            return res.redirect(`/dashboard?status=success&provider=spotify`);
+        } catch (err) {
+            return res.redirect(`/dashboard?error=${encodeURIComponent(err.message)}`);
+        }
+    }
+
+    @Get('playlists')
+    @UseGuards(JwtAuthGuard)
+    async getPlaylists(
+        @Req() req,
+        @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+        @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+    ) {
+        return this.spotifyAuthService.getUserPlaylists(req.user.user_id, limit, offset);
+    }
+
+    @Get('tracks')
+    @UseGuards(JwtAuthGuard)
+    async getUserTracks(
+        @Req() req,
+        @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+        @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+    ) {
+        return this.spotifyAuthService.getUserTracks(req.user.user_id, limit, offset);
+    }
+}

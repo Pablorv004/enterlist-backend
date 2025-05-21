@@ -101,6 +101,95 @@ This document provides comprehensive documentation for all endpoints in the Ente
 }
 ```
 
+### Spotify OAuth Login
+
+**Endpoint:** `GET /auth/spotify/login`
+
+**Description:** Initiates the Spotify OAuth flow. Redirects the user to Spotify's authorization page.
+
+**Authentication Required:** Yes (JWT)
+
+**Response:** 
+- Redirects to Spotify authorization page.
+
+### Spotify OAuth Callback
+
+**Endpoint:** `GET /auth/spotify/callback`
+
+**Description:** Callback endpoint for Spotify OAuth. This endpoint is called by Spotify after user authorization.
+
+**Query Parameters:**
+- `code`: The authorization code from Spotify
+- `state`: State parameter for CSRF protection
+- `error`: Error message (if any)
+
+**Response:** 
+- Redirects to the frontend dashboard with success or error status.
+
+### Get Spotify Playlists
+
+**Endpoint:** `GET /auth/spotify/playlists`
+
+**Description:** Retrieves the user's Spotify playlists.
+
+**Authentication Required:** Yes (JWT)
+
+**Query Parameters:**
+- `limit` (optional): Number of playlists to return (default: 50)
+- `offset` (optional): Offset for pagination (default: 0)
+
+**Response:**
+- **Status Code:** 200 (OK)
+- **Body:** Spotify API response containing the user's playlists
+
+### Get Spotify Tracks
+
+**Endpoint:** `GET /auth/spotify/tracks`
+
+**Description:** Retrieves the user's saved tracks and albums from Spotify. If the user is an artist, it will also return their artist albums.
+
+**Authentication Required:** Yes (JWT)
+
+**Query Parameters:**
+- `limit` (optional): Number of tracks to return (default: 50)
+- `offset` (optional): Offset for pagination (default: 0)
+
+**Response:**
+- **Status Code:** 200 (OK)
+- **Body:** Spotify API response containing the user's tracks and albums
+  - If user is an artist:
+    ```json
+    {
+      "saved_tracks": {
+        "items": [...],
+        "total": number,
+        "limit": number,
+        "offset": number,
+        "href": "string",
+        "next": "string"
+      },
+      "artist_albums": {
+        "items": [...],
+        "total": number,
+        "limit": number,
+        "offset": number,
+        "href": "string",
+        "next": "string"
+      }
+    }
+    ```
+  - If user is not an artist:
+    ```json
+    {
+      "items": [...],
+      "total": number,
+      "limit": number,
+      "offset": number,
+      "href": "string", 
+      "next": "string"
+    }
+    ```
+
 ---
 
 ## Users

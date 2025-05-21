@@ -14,6 +14,8 @@ import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { AdminActionsModule } from './admin-actions/admin-actions.module';
 import { HealthModule } from './health/health.module';
+import { SpotifyAuthModule } from './spotify-auth/spotify-auth.module';
+import { YoutubeAuthModule } from './youtube-auth/youtube-auth.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { HealthModule } from './health/health.module';
     TransactionsModule,
     AdminActionsModule,
     HealthModule,
+    SpotifyAuthModule,
+    YoutubeAuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
