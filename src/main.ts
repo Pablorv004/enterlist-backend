@@ -8,7 +8,11 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
   
-  app.enableCors();
+  app.enableCors({
+    origin: ['https://accounts.spotify.com', 'https://accounts.google.com'],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
   
   app.useGlobalFilters(new GlobalExceptionFilter());
   
