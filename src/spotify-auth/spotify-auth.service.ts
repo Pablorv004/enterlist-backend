@@ -25,6 +25,7 @@ export class SpotifyAuthService {
         private readonly authService: AuthService,
     ) {
         this.clientId = this.configService.get<string>('SPOTIFY_CLIENT_ID') || '';
+        console.log('Spotify Client ID:', this.clientId);
         this.clientSecret = this.configService.get<string>('SPOTIFY_CLIENT_SECRET') || '';
 
         // In production, this would come from environment variables or config
