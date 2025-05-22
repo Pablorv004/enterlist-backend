@@ -5,17 +5,13 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('api/auth/youtube')
 export class YoutubeAuthController {
-    constructor(private readonly youtubeAuthService: YoutubeAuthService) { }    @Get('login')
+    constructor(private readonly youtubeAuthService: YoutubeAuthService) { }
+
+    @Get('login')
+    @UseGuards(JwtAuthGuard)
     async login(@Req() req, @Res() res: Response) {
-        try {
-            // Extract user_id from token if available
-            const userId = req.user?.user_id;
-            const authUrl = await this.youtubeAuthService.getAuthorizationUrl(userId);
-            return res.json({ url: authUrl });
-        } catch (error) {
-            console.error('YouTube auth error:', error);
-            return res.status(500).json({ error: 'Failed to get YouTube authorization URL' });
-        }
+        const authUrl = await this.youtubeAuthService.getAuthorizationUrl(req.user.user_id);
+        return res.redirect(authUrl);
     }
 
     @Get('register-or-login')
@@ -23,7 +19,9 @@ export class YoutubeAuthController {
         // This endpoint doesn't require authentication as it's for new users
         const authUrl = await this.youtubeAuthService.getAuthorizationUrl();
         return res.redirect(authUrl);
-    }    @Get('callback')
+    }
+
+    @Get('callback')
     async callback(
         @Query('code') code: string,
         @Query('state') state: string,
@@ -31,14 +29,14 @@ export class YoutubeAuthController {
         @Res() res: Response,
     ) {
         if (error) {
-            return res.status(400).json({ error, message: 'Authorization failed' });
+            return res.redirect(`/dashboard?error=${error}`);
         }
 
         try {
             const result = await this.youtubeAuthService.handleCallback(code, state);
-            return res.status(200).json({ success: true, result });
+            return res.redirect(`/dashboard?status=success&provider=youtube`);
         } catch (err) {
-            return res.status(400).json({ error: err.message });
+            return res.redirect(`/dashboard?error=${encodeURIComponent(err.message)}`);
         }
     }
 

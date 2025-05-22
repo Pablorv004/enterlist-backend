@@ -5,17 +5,13 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('api/auth/spotify')
 export class SpotifyAuthController {
-    constructor(private readonly spotifyAuthService: SpotifyAuthService) { }    @Get('login')
+    constructor(private readonly spotifyAuthService: SpotifyAuthService) { }
+
+    @Get('login')
+    @UseGuards(JwtAuthGuard)
     async login(@Req() req, @Res() res: Response) {
-        try {
-            // Extract user_id from token if available
-            const userId = req.user?.user_id;
-            const authUrl = await this.spotifyAuthService.getAuthorizationUrl(userId);
-            return res.json({ url: authUrl });
-        } catch (error) {
-            console.error('Spotify auth error:', error);
-            return res.status(500).json({ error: 'Failed to get Spotify authorization URL' });
-        }
+        const authUrl = await this.spotifyAuthService.getAuthorizationUrl(req.user.user_id);
+        return res.redirect(authUrl);
     }
 
     @Get('register-or-login')
@@ -23,7 +19,9 @@ export class SpotifyAuthController {
         // This endpoint doesn't require authentication as it's for new users
         const authUrl = await this.spotifyAuthService.getAuthorizationUrl();
         return res.redirect(authUrl);
-    }    @Get('callback')
+    }
+
+    @Get('callback')
     async callback(
         @Query('code') code: string,
         @Query('state') state: string,
@@ -31,14 +29,14 @@ export class SpotifyAuthController {
         @Res() res: Response,
     ) {
         if (error) {
-            return res.status(400).json({ error, message: 'Authorization failed' });
+            return res.redirect(`/dashboard?error=${error}`);
         }
 
         try {
             const result = await this.spotifyAuthService.handleCallback(code, state);
-            return res.status(200).json({ success: true, result });
+            return res.redirect(`/dashboard?status=success&provider=spotify`);
         } catch (err) {
-            return res.status(400).json({ error: err.message });
+            return res.redirect(`/dashboard?error=${encodeURIComponent(err.message)}`);
         }
     }
 
