@@ -24,8 +24,8 @@ export class YoutubeAuthService {
         private readonly prismaService: PrismaService,
         private readonly authService: AuthService,
     ) {
-        this.clientId = this.configService.get<string>('YOUTUBE_CLIENT_ID') || '';
-        this.clientSecret = this.configService.get<string>('YOUTUBE_CLIENT_SECRET') || '';
+        this.clientId = this.configService.get<string>('YOUTUBE_CLIENT_ID') || 'test_client_id';
+        this.clientSecret = this.configService.get<string>('YOUTUBE_CLIENT_SECRET') || 'test_client_secret';
 
         // In production, this would come from environment variables or config
         const apiBaseUrl = this.configService.get<string>('API_BASE_URL') || 'http://localhost:3000';

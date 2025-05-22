@@ -8,10 +8,20 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
   
+  // Configure CORS with specific options for security
   app.enableCors({
-    origin: ['https://accounts.spotify.com', 'https://accounts.google.com'],
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    origin: [
+      process.env.FRONTEND_URL || 'http://localhost:5173', 
+      'https://accounts.spotify.com',
+      'https://api.spotify.com',
+      'https://accounts.google.com',
+      'https://oauth2.googleapis.com',
+      'https://www.googleapis.com'
+    ],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    exposedHeaders: ['Authorization']
   });
   
   app.useGlobalFilters(new GlobalExceptionFilter());
