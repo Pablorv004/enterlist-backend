@@ -40,6 +40,16 @@ export class YoutubeAuthController {
         }
     }
 
+    @Get('playlists')
+    @UseGuards(JwtAuthGuard)
+    async getPlaylists(
+        @Req() req,
+        @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+        @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+    ) {
+        return this.youtubeAuthService.getUserPlaylists(req.user.user_id, limit, offset);
+    }
+
     @Get('channels')
     @UseGuards(JwtAuthGuard)
     async getChannels(

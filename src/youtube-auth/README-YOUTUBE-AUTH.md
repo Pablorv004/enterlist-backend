@@ -45,6 +45,14 @@ This document provides information about the YouTube OAuth integration in Enterl
 
 **Authentication Required:** Yes (JWT)
 
+### Get YouTube Playlists
+
+**Endpoint:** `GET /api/auth/youtube/playlists`
+
+**Description:** Retrieves the user's YouTube playlists.
+
+**Authentication Required:** Yes (JWT)
+
 ### Get User Videos
 
 **Endpoint:** `GET /api/auth/youtube/videos`

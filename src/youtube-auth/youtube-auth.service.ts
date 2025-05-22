@@ -331,6 +331,58 @@ export class YoutubeAuthService {
         }
     }
 
+    // Get user playlists from YouTube
+    async getUserPlaylists(userId: string, limit = 50, offset = 0): Promise<any> {
+        // Find the YouTube platform
+        const youtubePlatform = await this.prismaService.platform.findFirst({
+            where: { name: 'YouTube' },
+        });
+
+        if (!youtubePlatform) {
+            throw new NotFoundException('YouTube platform not found in database');
+        }
+
+        // Find the user's linked YouTube account
+        const linkedAccount = await this.prismaService.linkedAccount.findFirst({
+            where: {
+                user_id: userId,
+                platform_id: youtubePlatform.platform_id,
+            },
+        });
+
+        if (!linkedAccount) {
+            throw new NotFoundException('YouTube account not linked for this user');
+        }
+
+        // Check if token is expired and refresh if needed
+        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
+            const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
+            linkedAccount.access_token = refreshedAccount.access_token;
+        }
+
+        // Fetch playlists from YouTube API
+        const headers = {
+            'Authorization': `Bearer ${linkedAccount.access_token}`,
+        };
+
+        try {
+            const { data } = await firstValueFrom(
+                this.httpService.get(
+                    `https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&mine=true&maxResults=${limit}&pageToken=${offset > 0 ? offset : ''}`,
+                    { headers }
+                ).pipe(
+                    catchError(error => {
+                        throw new BadRequestException(`Failed to fetch YouTube playlists: ${error.message}`);
+                    }),
+                ),
+            );
+
+            return data;
+        } catch (error) {
+            throw new BadRequestException(`Failed to fetch playlists: ${error.message}`);
+        }
+    }
+
     // Get user videos from YouTube
     async getUserVideos(userId: string, limit = 50, offset = 0): Promise<any> {
         // Find the YouTube platform
