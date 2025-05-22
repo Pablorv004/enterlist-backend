@@ -5,13 +5,17 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('api/auth/youtube')
 export class YoutubeAuthController {
-    constructor(private readonly youtubeAuthService: YoutubeAuthService) { }
-
-    @Get('login')
-    @UseGuards(JwtAuthGuard)
+    constructor(private readonly youtubeAuthService: YoutubeAuthService) { }    @Get('login')
     async login(@Req() req, @Res() res: Response) {
-        const authUrl = await this.youtubeAuthService.getAuthorizationUrl(req.user.user_id);
-        return res.redirect(authUrl);
+        try {
+            // Extract user_id from token if available
+            const userId = req.user?.user_id;
+            const authUrl = await this.youtubeAuthService.getAuthorizationUrl(userId);
+            return res.json({ url: authUrl });
+        } catch (error) {
+            console.error('YouTube auth error:', error);
+            return res.status(500).json({ error: 'Failed to get YouTube authorization URL' });
+        }
     }
 
     @Get('register-or-login')
