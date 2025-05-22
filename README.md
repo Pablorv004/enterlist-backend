@@ -4,12 +4,12 @@ Enterlist is a platform that connects music artists with playlist curators. This
 
 ## Description
 
-Enterlist allows artists from Spotify, SoundCloud, or YouTube to submit their songs to playlist makers. Playlist makers can review submissions and choose to accept or reject them. The platform facilitates these connections while providing an easy way for artists to get their music heard.
+Enterlist allows artists from Spotify or YouTube to submit their songs to playlist makers. Playlist makers can review submissions and choose to accept or reject them. The platform facilitates these connections while providing an easy way for artists to get their music heard.
 
 ## Features
 
 - User authentication and authorization (playlist makers, artists, admins)
-- OAuth integration with music platforms (Spotify, SoundCloud, YouTube)
+- OAuth integration with music platforms (Spotify, YouTube)
   - One-click registration and login with Spotify and YouTube
   - Automatic account linking with Spotify and YouTube
 - Song submission workflow

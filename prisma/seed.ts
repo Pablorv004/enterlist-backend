@@ -7,7 +7,6 @@ const prisma = new PrismaClient();
 async function main() {
     console.log('Starting database seed...');    const platforms = [
         { name: 'Spotify' },
-        { name: 'SoundCloud' },
         { name: 'YouTube Music' },
         { name: 'YouTube' },
     ];

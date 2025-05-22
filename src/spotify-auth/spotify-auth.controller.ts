@@ -19,9 +19,7 @@ export class SpotifyAuthController {
         // This endpoint doesn't require authentication as it's for new users
         const authUrl = await this.spotifyAuthService.getAuthorizationUrl();
         return res.redirect(authUrl);
-    }
-
-    @Get('callback')
+    }    @Get('callback')
     async callback(
         @Query('code') code: string,
         @Query('state') state: string,
@@ -29,14 +27,14 @@ export class SpotifyAuthController {
         @Res() res: Response,
     ) {
         if (error) {
-            return res.redirect(`/dashboard?error=${error}`);
+            return res.status(400).json({ error, message: 'Authorization failed' });
         }
 
         try {
             const result = await this.spotifyAuthService.handleCallback(code, state);
-            return res.redirect(`/dashboard?status=success&provider=spotify`);
+            return res.status(200).json({ success: true, result });
         } catch (err) {
-            return res.redirect(`/dashboard?error=${encodeURIComponent(err.message)}`);
+            return res.status(400).json({ error: err.message });
         }
     }
 

@@ -23,13 +23,14 @@ export class SpotifyAuthService {
         private readonly linkedAccountsService: LinkedAccountsService,
         private readonly prismaService: PrismaService,
         private readonly authService: AuthService,
-    ) {
-        this.clientId = this.configService.get<string>('SPOTIFY_CLIENT_ID') || '';
+    ) {        this.clientId = this.configService.get<string>('SPOTIFY_CLIENT_ID') || '';
         this.clientSecret = this.configService.get<string>('SPOTIFY_CLIENT_SECRET') || '';
 
-        // In production, this would come from environment variables or config
-        const apiBaseUrl = this.configService.get<string>('API_BASE_URL') || 'http://localhost:3000';
-        this.redirectUri = `${apiBaseUrl}/api/auth/spotify/callback`;
+        // Get the frontend URL from config to ensure proper redirection after OAuth
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+        
+        // We redirect back to the frontend with the proper OAuth parameters
+        this.redirectUri = `${frontendUrl}/oauth-callback?platform=spotify`;
     }
 
     async getAuthorizationUrl(userId?: string): Promise<string> {
