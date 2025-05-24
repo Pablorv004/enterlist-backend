@@ -34,13 +34,27 @@ export class YoutubeAuthController {
         
         if (error) {
             return res.redirect(`${frontendUrl}/dashboard?error=${error}`);
-        }
-
-        try {
+        }        try {
             const result = await this.youtubeAuthService.handleCallback(code, state);
             
             // Check if this is a new user that needs role selection
             if (result.isNewUser) {
+                // Set the JWT token as a cookie for the frontend to access
+                res.cookie('enterlist_token', result.access_token, {
+                    httpOnly: false, // Allow frontend to access this cookie
+                    secure: process.env.NODE_ENV === 'production',
+                    sameSite: 'lax',
+                    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+                });
+                
+                // Also set user data as a cookie
+                res.cookie('enterlist_user', JSON.stringify(result.user), {
+                    httpOnly: false,
+                    secure: process.env.NODE_ENV === 'production',
+                    sameSite: 'lax',
+                    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+                });
+                
                 return res.redirect(`${frontendUrl}/role-selection?provider=youtube&status=success`);
             }
             
