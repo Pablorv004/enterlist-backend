@@ -14,6 +14,7 @@ import { user_role } from '@prisma/client';
 export class YoutubeAuthService {
     private readonly clientId: string;
     private readonly clientSecret: string;
+    private readonly apiKey: string;
     private readonly redirectUri: string;
     private readonly stateMap = new Map<string, { userId?: string; expiresAt: Date; isNewUser?: boolean }>();
 
@@ -26,6 +27,7 @@ export class YoutubeAuthService {
     ) {
         this.clientId = this.configService.get<string>('YOUTUBE_CLIENT_ID') || 'test_client_id';
         this.clientSecret = this.configService.get<string>('YOUTUBE_CLIENT_SECRET') || 'test_client_secret';
+        this.apiKey = this.configService.get<string>('YOUTUBE_API_KEY') || 'test_api_key';
 
         // In production, this would come from environment variables or config
         const apiBaseUrl = this.configService.get<string>('API_BASE_URL') || 'http://localhost:3000';
@@ -314,13 +316,21 @@ export class YoutubeAuthService {
         // Fetch channels from YouTube API
         const headers = {
             'Authorization': `Bearer ${linkedAccount.access_token}`,
-        };
+        };        try {
+            const params = new URLSearchParams({
+                part: 'snippet,contentDetails,statistics',
+                mine: 'true',
+                key: this.apiKey
+            });
 
-        try {
+            const headers = {
+                'Authorization': `Bearer ${linkedAccount.access_token}`,
+            };
+
             const { data } = await firstValueFrom(
-                this.httpService.get(`https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&mine=true`, { headers }).pipe(
+                this.httpService.get(`https://www.googleapis.com/youtube/v3/channels?${params.toString()}`, { headers }).pipe(
                     catchError(error => {
-                        throw new BadRequestException(`Failed to fetch YouTube channels: ${error.message}`);
+                        throw new BadRequestException(`Failed to fetch YouTube channels: ${error.response?.data?.error?.message || error.message}`);
                     }),
                 ),
             );
@@ -363,16 +373,29 @@ export class YoutubeAuthService {
         // Fetch playlists from YouTube API
         const headers = {
             'Authorization': `Bearer ${linkedAccount.access_token}`,
-        };
+        };        try {
+            const params = new URLSearchParams({
+                part: 'snippet,contentDetails',
+                mine: 'true',
+                maxResults: limit.toString(),
+                key: this.apiKey
+            });
 
-        try {
+            if (offset > 0) {
+                params.append('pageToken', offset.toString());
+            }
+
+            const headers = {
+                'Authorization': `Bearer ${linkedAccount.access_token}`,
+            };
+
             const { data } = await firstValueFrom(
                 this.httpService.get(
-                    `https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&mine=true&maxResults=${limit}&pageToken=${offset > 0 ? offset : ''}`,
+                    `https://www.googleapis.com/youtube/v3/playlists?${params.toString()}`,
                     { headers }
                 ).pipe(
                     catchError(error => {
-                        throw new BadRequestException(`Failed to fetch YouTube playlists: ${error.message}`);
+                        throw new BadRequestException(`Failed to fetch YouTube playlists: ${error.response?.data?.error?.message || error.message}`);
                     }),
                 ),
             );
@@ -529,9 +552,7 @@ export class YoutubeAuthService {
         } catch (error) {
             throw new BadRequestException(`Token refresh failed: ${error.message}`);
         }
-    }
-
-    // Get tracks for a specific playlist from YouTube
+    }    // Get tracks for a specific playlist from YouTube
     async getPlaylistTracks(playlistId: string, userId: string): Promise<any> {
         // Find the YouTube platform
         const youtubePlatform = await this.prismaService.platform.findFirst({
@@ -560,44 +581,92 @@ export class YoutubeAuthService {
             linkedAccount.access_token = refreshedAccount.access_token;
         }
 
-        // Fetch playlist items from YouTube API
-        const headers = {
-            'Authorization': `Bearer ${linkedAccount.access_token}`,
-        };
-
         try {
-            const { data } = await firstValueFrom(
-                this.httpService.get(
-                    `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${playlistId}&maxResults=50`,
-                    { headers }
-                ).pipe(
-                    catchError(error => {
-                        throw new BadRequestException(`Failed to fetch YouTube playlist tracks: ${error.message}`);
-                    }),
-                ),
-            );
+            let allTracks = [];
+            let nextPageToken = '';
+            const maxResults = 50;
+            let totalCount = 0;
+            let pageCount = 0;
+            const maxPages = 10; // Limit to prevent infinite loops
 
-            // Transform the data to include additional track information
-            const tracks = data.items.map((item: any) => ({
-                track_id: item.contentDetails.videoId,
-                title: item.snippet.title,
-                artist: item.snippet.videoOwnerChannelTitle || item.snippet.channelTitle,
-                duration_ms: null, // YouTube API requires separate call for duration
-                thumbnail_url: item.snippet.thumbnails?.default?.url || item.snippet.thumbnails?.medium?.url,
-                url: `https://www.youtube.com/watch?v=${item.contentDetails.videoId}`,
-                platform_specific_id: item.contentDetails.videoId,
-                added_at: item.snippet.publishedAt,
-                description: item.snippet.description,
-                position: item.snippet.position,
-                type: 'youtube'
-            }));
+            // Fetch playlist items in chunks with pagination
+            do {
+                // Use API key in addition to OAuth token for better reliability
+                const params = new URLSearchParams({
+                    part: 'snippet,contentDetails',
+                    playlistId: playlistId,
+                    maxResults: maxResults.toString(),
+                    key: this.apiKey
+                });
+
+                if (nextPageToken) {
+                    params.append('pageToken', nextPageToken);
+                }
+
+                const headers = {
+                    'Authorization': `Bearer ${linkedAccount.access_token}`,
+                };
+
+                const { data } = await firstValueFrom(
+                    this.httpService.get(
+                        `https://www.googleapis.com/youtube/v3/playlistItems?${params.toString()}`,
+                        { headers }
+                    ).pipe(
+                        catchError(error => {
+                            // If OAuth fails, try with API key only for public playlists
+                            if (error.response?.status === 403 || error.response?.status === 401) {
+                                console.warn('OAuth failed, trying with API key only for public playlist');
+                                return this.httpService.get(
+                                    `https://www.googleapis.com/youtube/v3/playlistItems?${params.toString()}`
+                                ).pipe(
+                                    catchError(apiKeyError => {
+                                        throw new BadRequestException(`Failed to fetch YouTube playlist tracks: ${apiKeyError.response?.data?.error?.message || apiKeyError.message}`);
+                                    })
+                                );
+                            }
+                            throw new BadRequestException(`Failed to fetch YouTube playlist tracks: ${error.response?.data?.error?.message || error.message}`);
+                        }),
+                    ),
+                );
+
+                if (pageCount === 0) {
+                    totalCount = data.pageInfo?.totalResults || 0;
+                }
+
+                // Transform the data to include additional track information
+                const tracks = (data.items || [])
+                    .filter((item: any) => item.contentDetails?.videoId) // Filter out unavailable videos
+                    .map((item: any) => ({
+                        track_id: item.contentDetails.videoId,
+                        title: item.snippet.title,
+                        artist: item.snippet.videoOwnerChannelTitle || item.snippet.channelTitle,
+                        duration_ms: null, // YouTube API requires separate call for duration
+                        thumbnail_url: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
+                        url: `https://www.youtube.com/watch?v=${item.contentDetails.videoId}`,
+                        platform_specific_id: item.contentDetails.videoId,
+                        added_at: item.snippet.publishedAt,
+                        description: item.snippet.description?.substring(0, 200), // Limit description length
+                        position: item.snippet.position,
+                        type: 'youtube'
+                    }));
+
+                allTracks = allTracks.concat(tracks);
+                nextPageToken = data.nextPageToken || '';
+                pageCount++;
+                
+                // Add small delay to avoid rate limiting
+                if (nextPageToken && pageCount < maxPages) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+            } while (nextPageToken && pageCount < maxPages && allTracks.length < 500);
 
             return {
-                tracks,
-                total: data.pageInfo?.totalResults || data.items.length,
-                limit: data.pageInfo?.resultsPerPage || 50,
-                nextPageToken: data.nextPageToken,
-                prevPageToken: data.prevPageToken
+                tracks: allTracks,
+                total: totalCount,
+                fetched: allTracks.length,
+                hasMore: !!nextPageToken && allTracks.length < totalCount,
+                nextPageToken: nextPageToken
             };
         } catch (error) {
             throw new BadRequestException(`Failed to fetch playlist tracks: ${error.message}`);

@@ -498,9 +498,7 @@ export class SpotifyAuthService {
         } catch (error) {
             throw new BadRequestException(`Failed to fetch tracks: ${error.message}`);
         }
-    }
-
-    // Get tracks for a specific playlist from Spotify
+    }    // Get tracks for a specific playlist from Spotify
     async getPlaylistTracks(playlistId: string, userId: string): Promise<any> {
         // Find the Spotify platform
         const spotifyPlatform = await this.prismaService.platform.findFirst({
@@ -529,47 +527,70 @@ export class SpotifyAuthService {
             linkedAccount.access_token = refreshedAccount.access_token;
         }
 
-        // Fetch playlist tracks from Spotify API
+        // Fetch playlist tracks from Spotify API with pagination
         const headers = {
             'Authorization': `Bearer ${linkedAccount.access_token}`,
         };
 
         try {
-            const { data } = await firstValueFrom(
-                this.httpService.get(
-                    `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50`, 
-                    { headers }
-                ).pipe(
-                    catchError(error => {
-                        throw new BadRequestException(`Failed to fetch Spotify playlist tracks: ${error.message}`);
-                    }),
-                ),
-            );
+            let allTracks = [];
+            let offset = 0;
+            const limit = 50; // Spotify's maximum per request
+            let hasMore = true;
+            let totalCount = 0;
 
-            // Transform the data to include additional track information
-            const tracks = data.items.map((item: any) => ({
-                track_id: item.track.id,
-                title: item.track.name,
-                artist: item.track.artists.map((artist: any) => artist.name).join(', '),
-                album: item.track.album?.name,
-                duration_ms: item.track.duration_ms,
-                thumbnail_url: item.track.album?.images?.[0]?.url,
-                url: item.track.external_urls?.spotify,
-                platform_specific_id: item.track.id,
-                added_at: item.added_at,
-                preview_url: item.track.preview_url,
-                popularity: item.track.popularity,
-                explicit: item.track.explicit,
-                type: 'spotify'
-            }));
+            // Fetch tracks in chunks to avoid response truncation
+            while (hasMore && allTracks.length < 500) { // Limit to 500 tracks to prevent timeouts
+                const { data } = await firstValueFrom(
+                    this.httpService.get(
+                        `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}`,
+                        { headers }
+                    ).pipe(
+                        catchError(error => {
+                            throw new BadRequestException(`Failed to fetch Spotify playlist tracks: ${error.message}`);
+                        }),
+                    ),
+                );
+
+                if (offset === 0) {
+                    totalCount = data.total;
+                }
+
+                // Transform and add tracks
+                const tracks = data.items
+                    .filter((item: any) => item.track && item.track.id) // Filter out null tracks
+                    .map((item: any) => ({
+                        track_id: item.track.id,
+                        title: item.track.name,
+                        artist: item.track.artists.map((artist: any) => artist.name).join(', '),
+                        album: item.track.album?.name,
+                        duration_ms: item.track.duration_ms,
+                        thumbnail_url: item.track.album?.images?.[0]?.url,
+                        url: item.track.external_urls?.spotify,
+                        platform_specific_id: item.track.id,
+                        added_at: item.added_at,
+                        preview_url: item.track.preview_url,
+                        popularity: item.track.popularity,
+                        explicit: item.track.explicit,
+                        type: 'spotify'
+                    }));
+
+                allTracks = allTracks.concat(tracks);
+                offset += limit;
+                hasMore = data.next !== null && allTracks.length < data.total;
+                
+                // Add small delay to avoid rate limiting
+                if (hasMore) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
 
             return {
-                tracks,
-                total: data.total,
-                limit: data.limit,
-                offset: data.offset,
-                next: data.next,
-                previous: data.previous
+                tracks: allTracks,
+                total: totalCount,
+                fetched: allTracks.length,
+                limit: limit,
+                hasMore: allTracks.length < totalCount
             };
         } catch (error) {
             throw new BadRequestException(`Failed to fetch playlist tracks: ${error.message}`);
