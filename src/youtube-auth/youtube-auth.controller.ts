@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Req, Res, UseGuards, ParseIntPipe, DefaultValuePipe } from '@nestjs/common';
+import { Controller, Get, Query, Req, Res, UseGuards, ParseIntPipe, DefaultValuePipe, Post, Body } from '@nestjs/common';
 import { Response } from 'express';
 import { YoutubeAuthService } from './youtube-auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -109,5 +109,23 @@ export class YoutubeAuthController {
         @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
     ) {
         return this.youtubeAuthService.getUserSongs(req.user.user_id, limit, offset);
+    }
+
+    @Post('import/playlists')
+    @UseGuards(JwtAuthGuard)
+    async importPlaylists(
+        @Req() req,
+        @Body() body: { playlistIds: string[] }
+    ) {
+        return this.youtubeAuthService.importPlaylistsToDatabase(req.user.user_id, body.playlistIds);
+    }
+
+    @Post('import/videos')
+    @UseGuards(JwtAuthGuard)
+    async importVideos(
+        @Req() req,
+        @Body() body: { videoIds: string[] }
+    ) {
+        return this.youtubeAuthService.importVideosToDatabase(req.user.user_id, body.videoIds);
     }
 }

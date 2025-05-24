@@ -9,10 +9,11 @@ import {
     UseGuards,
     Query,
     ParseIntPipe,
-    DefaultValuePipe
+    DefaultValuePipe,
+    Req
 } from '@nestjs/common';
 import { PlaylistsService } from './playlists.service';
-import { CreatePlaylistDto, UpdatePlaylistDto } from './dto/playlist.dto';
+import { CreatePlaylistDto, UpdatePlaylistDto, ImportPlaylistsDto } from './dto/playlist.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -66,6 +67,12 @@ export class PlaylistsController {
     @Delete(':id')
     remove(@Param('id') id: string) {
         return this.playlistsService.remove(id);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Post('import')
+    importPlaylists(@Req() req, @Body() importPlaylistsDto: ImportPlaylistsDto) {
+        return this.playlistsService.importPlaylists(req.user.user_id, importPlaylistsDto.platformId);
     }
 }
 

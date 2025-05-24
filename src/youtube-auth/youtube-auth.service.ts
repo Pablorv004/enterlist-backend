@@ -672,4 +672,291 @@ export class YoutubeAuthService {
             throw new BadRequestException(`Failed to fetch playlist tracks: ${error.message}`);
         }
     }
+
+    // Import playlists to the database
+    async importPlaylistsToDatabase(userId: string, playlistIds: string[]): Promise<any> {
+        // Find the YouTube platform
+        const youtubePlatform = await this.prismaService.platform.findFirst({
+            where: { name: 'YouTube' },
+        });
+
+        if (!youtubePlatform) {
+            throw new NotFoundException('YouTube platform not found in database');
+        }
+
+        // Find the user's linked YouTube account
+        const linkedAccount = await this.prismaService.linkedAccount.findFirst({
+            where: {
+                user_id: userId,
+                platform_id: youtubePlatform.platform_id,
+            },
+        });
+
+        if (!linkedAccount) {
+            throw new NotFoundException('YouTube account not linked for this user');
+        }
+
+        // Check if token is expired and refresh if needed
+        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
+            const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
+            linkedAccount.access_token = refreshedAccount.access_token;
+        }
+
+        const headers = {
+            'Authorization': `Bearer ${linkedAccount.access_token}`,
+        };
+
+        const importedPlaylists: any[] = [];
+        const skippedPlaylists: any[] = [];
+
+        for (const playlistId of playlistIds) {
+            try {
+                // Fetch playlist details from YouTube
+                const params = new URLSearchParams({
+                    part: 'snippet,contentDetails',
+                    id: playlistId,
+                    key: this.apiKey
+                });
+
+                const { data: playlistData } = await firstValueFrom(
+                    this.httpService.get(
+                        `https://www.googleapis.com/youtube/v3/playlists?${params.toString()}`,
+                        { headers }
+                    ).pipe(
+                        catchError(error => {
+                            throw new BadRequestException(`Failed to fetch YouTube playlist ${playlistId}: ${error.message}`);
+                        }),
+                    ),
+                );
+
+                if (!playlistData.items || playlistData.items.length === 0) {
+                    skippedPlaylists.push({
+                        id: playlistId,
+                        name: 'Unknown',
+                        reason: 'Playlist not found'
+                    });
+                    continue;
+                }
+
+                const playlist = playlistData.items[0];
+
+                // Check if playlist already exists
+                const existingPlaylist = await this.prismaService.playlist.findFirst({
+                    where: {
+                        platform_id: youtubePlatform.platform_id,
+                        platform_specific_id: playlistId,
+                    },
+                });
+
+                if (existingPlaylist) {
+                    skippedPlaylists.push({
+                        id: playlistId,
+                        name: playlist.snippet.title,
+                        reason: 'Already exists'
+                    });
+                    continue;
+                }
+
+                // Create the playlist in the database
+                const newPlaylist = await this.prismaService.playlist.create({
+                    data: {
+                        playlist_id: require('uuid').v4(),
+                        creator_id: userId,
+                        platform_id: youtubePlatform.platform_id,
+                        platform_specific_id: playlistId,
+                        name: playlist.snippet.title,
+                        description: playlist.snippet.description || null,
+                        url: `https://www.youtube.com/playlist?list=${playlistId}`,
+                        cover_image_url: playlist.snippet.thumbnails?.medium?.url || 
+                                       playlist.snippet.thumbnails?.default?.url || null,
+                        is_visible: true,
+                        genre: null,
+                        follower_count: 0, // YouTube doesn't provide playlist follower count
+                        submission_fee: 0,
+                        created_at: new Date(),
+                        updated_at: new Date(),
+                    },
+                    include: {
+                        creator: {
+                            select: {
+                                username: true,
+                                email: true,
+                            },
+                        },
+                        platform: true,
+                    },
+                });
+
+                importedPlaylists.push(newPlaylist);
+            } catch (error) {
+                console.error(`Failed to import playlist ${playlistId}:`, error);
+                skippedPlaylists.push({
+                    id: playlistId,
+                    name: 'Unknown',
+                    reason: 'Import failed'
+                });
+            }
+        }
+
+        return {
+            imported: importedPlaylists,
+            skipped: skippedPlaylists,
+            message: `Successfully imported ${importedPlaylists.length} playlist(s). ${skippedPlaylists.length} playlist(s) were skipped.`
+        };
+    }
+
+    // Import videos to the database (as songs)
+    async importVideosToDatabase(userId: string, videoIds: string[]): Promise<any> {
+        // Find the YouTube platform
+        const youtubePlatform = await this.prismaService.platform.findFirst({
+            where: { name: 'YouTube' },
+        });
+
+        if (!youtubePlatform) {
+            throw new NotFoundException('YouTube platform not found in database');
+        }
+
+        // Find the user's linked YouTube account
+        const linkedAccount = await this.prismaService.linkedAccount.findFirst({
+            where: {
+                user_id: userId,
+                platform_id: youtubePlatform.platform_id,
+            },
+        });
+
+        if (!linkedAccount) {
+            throw new NotFoundException('YouTube account not linked for this user');
+        }
+
+        // Check if token is expired and refresh if needed
+        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
+            const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
+            linkedAccount.access_token = refreshedAccount.access_token;
+        }
+
+        const headers = {
+            'Authorization': `Bearer ${linkedAccount.access_token}`,
+        };
+
+        const importedVideos: any[] = [];
+        const skippedVideos: any[] = [];
+
+        // Process videos in chunks of 50 (YouTube API limit)
+        const chunkSize = 50;
+        for (let i = 0; i < videoIds.length; i += chunkSize) {
+            const chunk = videoIds.slice(i, i + chunkSize);
+            
+            try {
+                // Fetch video details from YouTube
+                const params = new URLSearchParams({
+                    part: 'snippet,contentDetails',
+                    id: chunk.join(','),
+                    key: this.apiKey
+                });
+
+                const { data: videosData } = await firstValueFrom(
+                    this.httpService.get(
+                        `https://www.googleapis.com/youtube/v3/videos?${params.toString()}`,
+                        { headers }
+                    ).pipe(
+                        catchError(error => {
+                            throw new BadRequestException(`Failed to fetch YouTube videos: ${error.message}`);
+                        }),
+                    ),
+                );
+
+                for (const video of videosData.items || []) {
+                    if (!video) continue; // Skip null videos
+
+                    try {
+                        // Check if song already exists
+                        const existingSong = await this.prismaService.song.findFirst({
+                            where: {
+                                platform_id: youtubePlatform.platform_id,
+                                platform_specific_id: video.id,
+                            },
+                        });
+
+                        if (existingSong) {
+                            skippedVideos.push({
+                                id: video.id,
+                                title: video.snippet.title,
+                                reason: 'Already exists'
+                            });
+                            continue;
+                        }                        // Parse duration from ISO 8601 format (PT1M23S -> 83 seconds)
+                        let durationMs: number | null = null;
+                        if (video.contentDetails?.duration) {
+                            const duration = video.contentDetails.duration;
+                            const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+                            if (match) {
+                                const hours = parseInt(match[1] || '0');
+                                const minutes = parseInt(match[2] || '0');
+                                const seconds = parseInt(match[3] || '0');
+                                durationMs = (hours * 3600 + minutes * 60 + seconds) * 1000;
+                            }
+                        }
+
+                        // Create the song in the database
+                        const newSong = await this.prismaService.song.create({
+                            data: {
+                                song_id: require('uuid').v4(),
+                                artist_id: userId, // The user importing becomes the artist
+                                platform_id: youtubePlatform.platform_id,
+                                platform_specific_id: video.id,
+                                title: video.snippet.title,
+                                artist_name_on_platform: video.snippet.channelTitle,
+                                album_name: null,
+                                url: `https://www.youtube.com/watch?v=${video.id}`,
+                                cover_image_url: video.snippet.thumbnails?.medium?.url || 
+                                               video.snippet.thumbnails?.default?.url || null,
+                                duration_ms: durationMs,
+                                is_visible: true,
+                                created_at: new Date(),
+                                updated_at: new Date(),
+                            },
+                            include: {
+                                artist: {
+                                    select: {
+                                        username: true,
+                                        email: true,
+                                    },
+                                },
+                                platform: true,
+                            },
+                        });
+
+                        importedVideos.push(newSong);
+                    } catch (error) {
+                        console.error(`Failed to import video ${video.id}:`, error);
+                        skippedVideos.push({
+                            id: video.id,
+                            title: video.snippet?.title || 'Unknown',
+                            reason: 'Import failed'
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error(`Failed to fetch video chunk:`, error);
+                chunk.forEach(videoId => {
+                    skippedVideos.push({
+                        id: videoId,
+                        title: 'Unknown',
+                        reason: 'Fetch failed'
+                    });
+                });
+            }
+
+            // Add small delay to avoid rate limiting
+            if (i + chunkSize < videoIds.length) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+
+        return {
+            imported: importedVideos,
+            skipped: skippedVideos,
+            message: `Successfully imported ${importedVideos.length} video(s). ${skippedVideos.length} video(s) were skipped.`
+        };
+    }
 }

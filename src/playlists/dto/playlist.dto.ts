@@ -88,3 +88,9 @@ export class UpdatePlaylistDto {
     @IsOptional()
     follower_count?: number;
 }
+
+export class ImportPlaylistsDto {
+    @IsInt()
+    @IsNotEmpty()
+    platformId: number;
+}

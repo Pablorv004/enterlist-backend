@@ -595,5 +595,252 @@ export class SpotifyAuthService {
         } catch (error) {
             throw new BadRequestException(`Failed to fetch playlist tracks: ${error.message}`);
         }
+    }    // Import playlists to the database
+    async importPlaylistsToDatabase(userId: string, playlistIds: string[]): Promise<any> {
+        // Find the Spotify platform
+        const spotifyPlatform = await this.prismaService.platform.findFirst({
+            where: { name: 'Spotify' },
+        });
+
+        if (!spotifyPlatform) {
+            throw new NotFoundException('Spotify platform not found in database');
+        }
+
+        // Find the user's linked Spotify account
+        const linkedAccount = await this.prismaService.linkedAccount.findFirst({
+            where: {
+                user_id: userId,
+                platform_id: spotifyPlatform.platform_id,
+            },
+        });
+
+        if (!linkedAccount) {
+            throw new NotFoundException('Spotify account not linked for this user');
+        }
+
+        // Check if token is expired and refresh if needed
+        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
+            const refreshedAccount = await this.refreshAccessToken(userId, spotifyPlatform.platform_id);
+            linkedAccount.access_token = refreshedAccount.access_token;
+        }
+
+        const headers = {
+            'Authorization': `Bearer ${linkedAccount.access_token}`,
+        };
+
+        const importedPlaylists: any[] = [];
+        const skippedPlaylists: any[] = [];
+
+        for (const playlistId of playlistIds) {
+            try {
+                // Fetch playlist details from Spotify
+                const { data: playlistData } = await firstValueFrom(
+                    this.httpService.get(
+                        `https://api.spotify.com/v1/playlists/${playlistId}`,
+                        { headers }
+                    ).pipe(
+                        catchError(error => {
+                            throw new BadRequestException(`Failed to fetch Spotify playlist ${playlistId}: ${error.message}`);
+                        }),
+                    ),
+                );
+
+                // Check if playlist already exists
+                const existingPlaylist = await this.prismaService.playlist.findFirst({
+                    where: {
+                        platform_id: spotifyPlatform.platform_id,
+                        platform_specific_id: playlistId,
+                    },
+                });
+
+                if (existingPlaylist) {
+                    skippedPlaylists.push({
+                        id: playlistId,
+                        name: playlistData.name,
+                        reason: 'Already exists'
+                    });
+                    continue;
+                }
+
+                // Create the playlist in the database
+                const newPlaylist = await this.prismaService.playlist.create({
+                    data: {
+                        playlist_id: require('uuid').v4(),
+                        creator_id: userId,
+                        platform_id: spotifyPlatform.platform_id,
+                        platform_specific_id: playlistId,
+                        name: playlistData.name,
+                        description: playlistData.description || null,
+                        url: playlistData.external_urls?.spotify || null,
+                        cover_image_url: playlistData.images?.[0]?.url || null,
+                        is_visible: true,
+                        genre: null,
+                        follower_count: playlistData.followers?.total || 0,
+                        submission_fee: 0,
+                        created_at: new Date(),
+                        updated_at: new Date(),
+                    },
+                    include: {
+                        creator: {
+                            select: {
+                                username: true,
+                                email: true,
+                            },
+                        },
+                        platform: true,
+                    },
+                });
+
+                importedPlaylists.push(newPlaylist);
+            } catch (error) {
+                console.error(`Failed to import playlist ${playlistId}:`, error);
+                skippedPlaylists.push({
+                    id: playlistId,
+                    name: 'Unknown',
+                    reason: 'Import failed'
+                });
+            }
+        }
+
+        return {
+            imported: importedPlaylists,
+            skipped: skippedPlaylists,
+            message: `Successfully imported ${importedPlaylists.length} playlist(s). ${skippedPlaylists.length} playlist(s) were skipped.`
+        };
+    }    // Import tracks to the database (as songs)
+    async importTracksToDatabase(userId: string, trackIds: string[]): Promise<any> {
+        // Find the Spotify platform
+        const spotifyPlatform = await this.prismaService.platform.findFirst({
+            where: { name: 'Spotify' },
+        });
+
+        if (!spotifyPlatform) {
+            throw new NotFoundException('Spotify platform not found in database');
+        }
+
+        // Find the user's linked Spotify account
+        const linkedAccount = await this.prismaService.linkedAccount.findFirst({
+            where: {
+                user_id: userId,
+                platform_id: spotifyPlatform.platform_id,
+            },
+        });
+
+        if (!linkedAccount) {
+            throw new NotFoundException('Spotify account not linked for this user');
+        }
+
+        // Check if token is expired and refresh if needed
+        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
+            const refreshedAccount = await this.refreshAccessToken(userId, spotifyPlatform.platform_id);
+            linkedAccount.access_token = refreshedAccount.access_token;
+        }
+
+        const headers = {
+            'Authorization': `Bearer ${linkedAccount.access_token}`,
+        };
+
+        const importedTracks: any[] = [];
+        const skippedTracks: any[] = [];
+
+        // Process tracks in chunks of 50 (Spotify API limit)
+        const chunkSize = 50;
+        for (let i = 0; i < trackIds.length; i += chunkSize) {
+            const chunk = trackIds.slice(i, i + chunkSize);
+            
+            try {
+                // Fetch track details from Spotify
+                const { data: tracksData } = await firstValueFrom(
+                    this.httpService.get(
+                        `https://api.spotify.com/v1/tracks?ids=${chunk.join(',')}`,
+                        { headers }
+                    ).pipe(
+                        catchError(error => {
+                            throw new BadRequestException(`Failed to fetch Spotify tracks: ${error.message}`);
+                        }),
+                    ),
+                );
+
+                for (const track of tracksData.tracks) {
+                    if (!track) continue; // Skip null tracks
+
+                    try {
+                        // Check if song already exists
+                        const existingSong = await this.prismaService.song.findFirst({
+                            where: {
+                                platform_id: spotifyPlatform.platform_id,
+                                platform_specific_id: track.id,
+                            },
+                        });
+
+                        if (existingSong) {
+                            skippedTracks.push({
+                                id: track.id,
+                                title: track.name,
+                                reason: 'Already exists'
+                            });
+                            continue;
+                        }
+
+                        // Create the song in the database
+                        const newSong = await this.prismaService.song.create({
+                            data: {
+                                song_id: require('uuid').v4(),
+                                artist_id: userId, // The user importing becomes the artist
+                                platform_id: spotifyPlatform.platform_id,
+                                platform_specific_id: track.id,
+                                title: track.name,
+                                artist_name_on_platform: track.artists.map(artist => artist.name).join(', '),
+                                album_name: track.album?.name || null,
+                                url: track.external_urls?.spotify || null,
+                                cover_image_url: track.album?.images?.[0]?.url || null,
+                                duration_ms: track.duration_ms || null,
+                                is_visible: true,
+                                created_at: new Date(),
+                                updated_at: new Date(),
+                            },
+                            include: {
+                                artist: {
+                                    select: {
+                                        username: true,
+                                        email: true,
+                                    },
+                                },
+                                platform: true,
+                            },
+                        });
+
+                        importedTracks.push(newSong);
+                    } catch (error) {
+                        console.error(`Failed to import track ${track.id}:`, error);
+                        skippedTracks.push({
+                            id: track.id,
+                            title: track.name,
+                            reason: 'Import failed'
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error(`Failed to fetch track chunk:`, error);
+                chunk.forEach(trackId => {
+                    skippedTracks.push({
+                        id: trackId,
+                        title: 'Unknown',
+                        reason: 'Fetch failed'
+                    });
+                });
+            }
+
+            // Add small delay to avoid rate limiting
+            if (i + chunkSize < trackIds.length) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+
+        return {
+            imported: importedTracks,
+            skipped: skippedTracks,
+            message: `Successfully imported ${importedTracks.length} track(s). ${skippedTracks.length} track(s) were skipped.`
+        };
     }
 }
