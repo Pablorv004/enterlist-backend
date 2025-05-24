@@ -28,7 +28,6 @@ export class SpotifyAuthService {
         console.log('Spotify Client ID:', this.clientId);
         this.clientSecret = this.configService.get<string>('SPOTIFY_CLIENT_SECRET') || 'test_client_secret';
 
-        // In production, this would come from environment variables or config
         const apiBaseUrl = this.configService.get<string>('API_BASE_URL') || 'http://localhost:3000';
         this.redirectUri = `${apiBaseUrl}/api/auth/spotify/callback`;
     }

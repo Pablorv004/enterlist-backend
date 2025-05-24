@@ -2,10 +2,14 @@ import { Controller, Get, Query, Req, Res, UseGuards, ParseIntPipe, DefaultValue
 import { Response } from 'express';
 import { YoutubeAuthService } from './youtube-auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ConfigService } from '@nestjs/config';
 
 @Controller('api/auth/youtube')
 export class YoutubeAuthController {
-    constructor(private readonly youtubeAuthService: YoutubeAuthService) { }
+    constructor(
+        private readonly youtubeAuthService: YoutubeAuthService,
+        private readonly configService: ConfigService
+    ) { }
 
     @Get('login')
     @UseGuards(JwtAuthGuard)
@@ -19,24 +23,24 @@ export class YoutubeAuthController {
         // This endpoint doesn't require authentication as it's for new users
         const authUrl = await this.youtubeAuthService.getAuthorizationUrl();
         return res.redirect(authUrl);
-    }
-
-    @Get('callback')
+    }    @Get('callback')
     async callback(
         @Query('code') code: string,
         @Query('state') state: string,
         @Query('error') error: string,
         @Res() res: Response,
     ) {
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+        
         if (error) {
-            return res.redirect(`/dashboard?error=${error}`);
+            return res.redirect(`${frontendUrl}/dashboard?error=${error}`);
         }
 
         try {
             const result = await this.youtubeAuthService.handleCallback(code, state);
-            return res.redirect(`/dashboard?status=success&provider=youtube`);
+            return res.redirect(`${frontendUrl}/dashboard?status=success&provider=youtube`);
         } catch (err) {
-            return res.redirect(`/dashboard?error=${encodeURIComponent(err.message)}`);
+            return res.redirect(`${frontendUrl}/dashboard?error=${encodeURIComponent(err.message)}`);
         }
     }
 

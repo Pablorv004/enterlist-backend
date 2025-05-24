@@ -2,10 +2,14 @@ import { Controller, Get, Query, Req, Res, UseGuards, ParseIntPipe, DefaultValue
 import { Response } from 'express';
 import { SpotifyAuthService } from './spotify-auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ConfigService } from '@nestjs/config';
 
 @Controller('api/auth/spotify')
 export class SpotifyAuthController {
-    constructor(private readonly spotifyAuthService: SpotifyAuthService) { }
+    constructor(
+        private readonly spotifyAuthService: SpotifyAuthService,
+        private readonly configService: ConfigService
+    ) { }
 
     @Get('login')
     @UseGuards(JwtAuthGuard)
@@ -28,15 +32,17 @@ export class SpotifyAuthController {
         @Query('error') error: string,
         @Res() res: Response,
     ) {
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+        
         if (error) {
-            return res.redirect(`/dashboard?error=${error}`);
+            return res.redirect(`${frontendUrl}/dashboard?error=${error}`);
         }
 
         try {
             const result = await this.spotifyAuthService.handleCallback(code, state);
-            return res.redirect(`/dashboard?status=success&provider=spotify`);
+            return res.redirect(`${frontendUrl}/dashboard?status=success&provider=spotify`);
         } catch (err) {
-            return res.redirect(`/dashboard?error=${encodeURIComponent(err.message)}`);
+            return res.redirect(`${frontendUrl}/dashboard?error=${encodeURIComponent(err.message)}`);
         }
     }
 
