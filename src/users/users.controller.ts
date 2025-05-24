@@ -9,10 +9,11 @@ import {
     UseGuards,
     Query,
     ParseIntPipe,
-    DefaultValuePipe
+    DefaultValuePipe,
+    Req
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
+import { CreateUserDto, UpdateUserDto, UpdateRoleDto } from './dto/user.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -51,5 +52,11 @@ export class UsersController {
     @Delete(':id')
     remove(@Param('id') id: string) {
         return this.usersService.remove(id);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Put('role/update')
+    updateRole(@Req() req, @Body() updateRoleDto: UpdateRoleDto) {
+        return this.usersService.updateRole(req.user.user_id, updateRoleDto.role);
     }
 }

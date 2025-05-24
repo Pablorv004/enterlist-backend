@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 import { v4 as uuidv4 } from 'uuid';
 import * as bcrypt from 'bcrypt';
+import { user_role } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -107,22 +108,39 @@ export class UsersService {
     }
 
     async update(id: string, updateUserDto: UpdateUserDto) {
-        await this.findOne(id);
+        const user = await this.findOne(id);
 
-        const updateData: any = {
-            ...updateUserDto,
-            updated_at: new Date(),
-        };
+        if (updateUserDto.email && updateUserDto.email !== user.email) {
+            const existingUser = await this.prismaService.user.findFirst({
+                where: { email: updateUserDto.email },
+            });
+
+            if (existingUser && existingUser.user_id !== id) {
+                throw new ConflictException('Email already in use');
+            }
+        }
+
+        if (updateUserDto.username && updateUserDto.username !== user.username) {
+            const existingUser = await this.prismaService.user.findFirst({
+                where: { username: updateUserDto.username },
+            });
+
+            if (existingUser && existingUser.user_id !== id) {
+                throw new ConflictException('Username already taken');
+            }
+        }
+
+        const data: any = { ...updateUserDto, updated_at: new Date() };
 
         if (updateUserDto.password) {
             const saltRounds = 10;
-            updateData.password_hash = await bcrypt.hash(updateUserDto.password, saltRounds);
-            delete updateData.password;
+            data.password_hash = await bcrypt.hash(updateUserDto.password, saltRounds);
+            delete data.password;
         }
 
         return this.prismaService.user.update({
             where: { user_id: id },
-            data: updateData,
+            data,
             select: {
                 user_id: true,
                 username: true,
@@ -131,6 +149,29 @@ export class UsersService {
                 is_active: true,
                 created_at: true,
                 updated_at: true,
+                oauth_provider: true,
+            },
+        });
+    }
+
+    async updateRole(userId: string, role: user_role) {
+        const user = await this.findOne(userId);
+
+        return this.prismaService.user.update({
+            where: { user_id: userId },
+            data: {
+                role,
+                updated_at: new Date(),
+            },
+            select: {
+                user_id: true,
+                username: true,
+                email: true,
+                role: true,
+                is_active: true,
+                created_at: true,
+                updated_at: true,
+                oauth_provider: true,
             },
         });
     }

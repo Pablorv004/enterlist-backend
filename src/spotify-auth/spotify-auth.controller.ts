@@ -23,9 +23,7 @@ export class SpotifyAuthController {
         // This endpoint doesn't require authentication as it's for new users
         const authUrl = await this.spotifyAuthService.getAuthorizationUrl();
         return res.redirect(authUrl);
-    }
-
-    @Get('callback')
+    }    @Get('callback')
     async callback(
         @Query('code') code: string,
         @Query('state') state: string,
@@ -40,6 +38,13 @@ export class SpotifyAuthController {
 
         try {
             const result = await this.spotifyAuthService.handleCallback(code, state);
+            
+            // Check if this is a new user that needs role selection
+            if (result.isNewUser) {
+                return res.redirect(`${frontendUrl}/role-selection?provider=spotify&status=success`);
+            }
+            
+            // If not a new user or role already set, go to dashboard
             return res.redirect(`${frontendUrl}/dashboard?status=success&provider=spotify`);
         } catch (err) {
             return res.redirect(`${frontendUrl}/dashboard?error=${encodeURIComponent(err.message)}`);

@@ -55,3 +55,8 @@ export class UserIdDto {
     user_id: string;
 }
 
+export class UpdateRoleDto {
+    @IsEnum(user_role)
+    role: user_role;
+}
+

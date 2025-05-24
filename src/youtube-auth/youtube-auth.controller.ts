@@ -38,6 +38,13 @@ export class YoutubeAuthController {
 
         try {
             const result = await this.youtubeAuthService.handleCallback(code, state);
+            
+            // Check if this is a new user that needs role selection
+            if (result.isNewUser) {
+                return res.redirect(`${frontendUrl}/role-selection?provider=youtube&status=success`);
+            }
+            
+            // If not a new user or role already set, go to dashboard
             return res.redirect(`${frontendUrl}/dashboard?status=success&provider=youtube`);
         } catch (err) {
             return res.redirect(`${frontendUrl}/dashboard?error=${encodeURIComponent(err.message)}`);
