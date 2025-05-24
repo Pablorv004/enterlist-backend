@@ -96,7 +96,18 @@ export class YoutubeAuthController {
         @Req() req,
         @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
         @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+        @Query('musicOnly', new DefaultValuePipe(false)) musicOnly: boolean,
     ) {
-        return this.youtubeAuthService.getUserVideos(req.user.user_id, limit, offset);
+        return this.youtubeAuthService.getUserVideos(req.user.user_id, limit, offset, musicOnly);
+    }
+
+    @Get('songs')
+    @UseGuards(JwtAuthGuard)
+    async getUserSongs(
+        @Req() req,
+        @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+        @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+    ) {
+        return this.youtubeAuthService.getUserSongs(req.user.user_id, limit, offset);
     }
 }

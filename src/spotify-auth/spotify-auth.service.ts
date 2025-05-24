@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { LinkedAccountsService } from '../linked-accounts/linked-accounts.service';
 import { CreateLinkedAccountDto } from '../linked-accounts/dto/linked-account.dto';
 import { PrismaService } from '../prisma/prisma.service';
-import { catchError, firstValueFrom } from 'rxjs';
+import { catchError, firstValueFrom, of } from 'rxjs';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { AuthService } from '../auth/auth.service';
@@ -255,9 +255,7 @@ export class SpotifyAuthService {
                 this.stateMap.delete(key);
             }
         }
-    }
-
-    // Get user playlists from Spotify
+    }    // Get user playlists from Spotify
     async getUserPlaylists(userId: string, limit = 50, offset = 0): Promise<any> {
         // Find the Spotify platform
         const spotifyPlatform = await this.prismaService.platform.findFirst({
@@ -300,7 +298,39 @@ export class SpotifyAuthService {
                 ),
             );
 
-            return data;
+            // For each playlist, get the tracks
+            const playlistsWithTracks = await Promise.all(
+                data.items.map(async (playlist) => {
+                    try {
+                        const tracksResponse = await firstValueFrom(
+                            this.httpService.get(
+                                `https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=50`, 
+                                { headers }
+                            ).pipe(                                catchError(error => {
+                                    console.warn(`Failed to fetch tracks for playlist ${playlist.id}:`, error.message);
+                                    return of({ data: { items: [] } });
+                                }),
+                            ),
+                        );
+
+                        return {
+                            ...playlist,
+                            tracks: {
+                                ...playlist.tracks,
+                                items: tracksResponse.data.items
+                            }
+                        };
+                    } catch (error) {
+                        console.warn(`Error fetching tracks for playlist ${playlist.id}:`, error);
+                        return playlist;
+                    }
+                })
+            );
+
+            return {
+                ...data,
+                items: playlistsWithTracks
+            };
         } catch (error) {
             throw new BadRequestException(`Failed to fetch playlists: ${error.message}`);
         }
@@ -356,9 +386,7 @@ export class SpotifyAuthService {
         } catch (error) {
             throw new BadRequestException(`Token refresh failed: ${error.message}`);
         }
-    }
-
-    // Get user tracks from Spotify
+    }    // Get user tracks from Spotify (for artists)
     async getUserTracks(userId: string, limit = 50, offset = 0): Promise<any> {
         // Find the Spotify platform
         const spotifyPlatform = await this.prismaService.platform.findFirst({
@@ -387,43 +415,164 @@ export class SpotifyAuthService {
             linkedAccount.access_token = refreshedAccount.access_token;
         }
 
-        // Fetch tracks from Spotify API
+        // Get user profile to find artist ID
+        const profile = await this.getSpotifyUserProfile(linkedAccount.access_token);
+        
+        const headers = {
+            'Authorization': `Bearer ${linkedAccount.access_token}`,
+        };        try {
+            // First, try to get artist information
+            let artistTracks: any[] = [];
+            
+            // Search for the user as an artist
+            try {
+                const searchResponse = await firstValueFrom(
+                    this.httpService.get(
+                        `https://api.spotify.com/v1/search?q=${encodeURIComponent(profile.display_name)}&type=artist&limit=1`, 
+                        { headers }
+                    )
+                );
+
+                if (searchResponse.data.artists.items.length > 0) {
+                    const artistId = searchResponse.data.artists.items[0].id;
+                    
+                    // Get artist's albums
+                    try {
+                        const albumsResponse = await firstValueFrom(
+                            this.httpService.get(
+                                `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single&limit=${limit}&offset=${offset}`, 
+                                { headers }
+                            )
+                        );
+
+                        // For each album, get the tracks
+                        for (const album of albumsResponse.data.items) {
+                            try {
+                                const tracksResponse = await firstValueFrom(
+                                    this.httpService.get(
+                                        `https://api.spotify.com/v1/albums/${album.id}/tracks`, 
+                                        { headers }
+                                    )
+                                );
+
+                                // Add album cover to each track
+                                const tracksWithAlbum = tracksResponse.data.items.map((track: any) => ({
+                                    ...track,
+                                    album: {
+                                        id: album.id,
+                                        name: album.name,
+                                        images: album.images,
+                                        release_date: album.release_date
+                                    }
+                                }));
+
+                                artistTracks = [...artistTracks, ...tracksWithAlbum];
+                            } catch (error) {
+                                console.warn(`Failed to fetch tracks for album ${album.id}:`, error.message);
+                            }
+                        }
+                    } catch (error) {
+                        console.warn('Failed to fetch artist albums:', error.message);
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to search for artist:', error.message);
+            }
+
+            // Also get saved tracks as fallback
+            let savedTracks: any[] = [];
+            try {
+                const savedTracksResponse = await firstValueFrom(
+                    this.httpService.get(`https://api.spotify.com/v1/me/tracks?limit=${limit}&offset=${offset}`, { headers })
+                );
+                savedTracks = savedTracksResponse.data.items || [];
+            } catch (error) {
+                console.warn('Failed to fetch saved tracks:', error.message);
+            }
+
+            return {
+                artist_tracks: artistTracks,
+                saved_tracks: savedTracks,
+                artist_info: artistTracks.length > 0 ? { display_name: profile.display_name } : null
+            };
+        } catch (error) {
+            throw new BadRequestException(`Failed to fetch tracks: ${error.message}`);
+        }
+    }
+
+    // Get tracks for a specific playlist from Spotify
+    async getPlaylistTracks(playlistId: string, userId: string): Promise<any> {
+        // Find the Spotify platform
+        const spotifyPlatform = await this.prismaService.platform.findFirst({
+            where: { name: 'Spotify' },
+        });
+
+        if (!spotifyPlatform) {
+            throw new NotFoundException('Spotify platform not found in database');
+        }
+
+        // Find the user's linked Spotify account
+        const linkedAccount = await this.prismaService.linkedAccount.findFirst({
+            where: {
+                user_id: userId,
+                platform_id: spotifyPlatform.platform_id,
+            },
+        });
+
+        if (!linkedAccount) {
+            throw new NotFoundException('Spotify account not linked for this user');
+        }
+
+        // Check if token is expired and refresh if needed
+        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
+            const refreshedAccount = await this.refreshAccessToken(userId, spotifyPlatform.platform_id);
+            linkedAccount.access_token = refreshedAccount.access_token;
+        }
+
+        // Fetch playlist tracks from Spotify API
         const headers = {
             'Authorization': `Bearer ${linkedAccount.access_token}`,
         };
 
         try {
-            // First fetch user's saved tracks
-            const savedTracksResponse = await firstValueFrom(
-                this.httpService.get(`https://api.spotify.com/v1/me/tracks?limit=${limit}&offset=${offset}`, { headers }).pipe(
+            const { data } = await firstValueFrom(
+                this.httpService.get(
+                    `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50`, 
+                    { headers }
+                ).pipe(
                     catchError(error => {
-                        throw new BadRequestException(`Failed to fetch Spotify saved tracks: ${error.message}`);
+                        throw new BadRequestException(`Failed to fetch Spotify playlist tracks: ${error.message}`);
                     }),
                 ),
             );
-            
-            // Then check if user is an artist and fetch their tracks
-            try {
-                const artistResponse = await firstValueFrom(
-                    this.httpService.get('https://api.spotify.com/v1/me/albums', { headers }).pipe(
-                            catchError(() => {
-                                // Not an artist or no albums, just return saved tracks
-                                return savedTracksResponse.data ? [savedTracksResponse] : [];
-                            }),
-                        ),
-                );
-                
-                // Combine saved tracks with artist tracks if both are available
-                return {
-                    saved_tracks: savedTracksResponse.data,
-                    artist_albums: artistResponse.data
-                };
-            } catch (artistError) {
-                // If error fetching artist data, just return saved tracks
-                return savedTracksResponse.data;
-            }
+
+            // Transform the data to include additional track information
+            const tracks = data.items.map((item: any) => ({
+                track_id: item.track.id,
+                title: item.track.name,
+                artist: item.track.artists.map((artist: any) => artist.name).join(', '),
+                album: item.track.album?.name,
+                duration_ms: item.track.duration_ms,
+                thumbnail_url: item.track.album?.images?.[0]?.url,
+                url: item.track.external_urls?.spotify,
+                platform_specific_id: item.track.id,
+                added_at: item.added_at,
+                preview_url: item.track.preview_url,
+                popularity: item.track.popularity,
+                explicit: item.track.explicit,
+                type: 'spotify'
+            }));
+
+            return {
+                tracks,
+                total: data.total,
+                limit: data.limit,
+                offset: data.offset,
+                next: data.next,
+                previous: data.previous
+            };
         } catch (error) {
-            throw new BadRequestException(`Failed to fetch tracks: ${error.message}`);
+            throw new BadRequestException(`Failed to fetch playlist tracks: ${error.message}`);
         }
     }
 }

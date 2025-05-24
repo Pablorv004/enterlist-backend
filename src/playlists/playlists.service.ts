@@ -1,11 +1,17 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePlaylistDto, UpdatePlaylistDto } from './dto/playlist.dto';
+import { SpotifyAuthService } from '../spotify-auth/spotify-auth.service';
+import { YoutubeAuthService } from '../youtube-auth/youtube-auth.service';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class PlaylistsService {
-    constructor(private readonly prismaService: PrismaService) { }
+    constructor(
+        private readonly prismaService: PrismaService,
+        private readonly spotifyAuthService: SpotifyAuthService,
+        private readonly youtubeAuthService: YoutubeAuthService,
+    ) { }
 
     async findAll(skip = 0, take = 10) {
         const [data, total] = await Promise.all([
@@ -44,9 +50,7 @@ export class PlaylistsService {
         ]);
 
         return { data, total, skip, take };
-    }
-
-    async findOne(id: string) {
+    }    async findOne(id: string) {
         const playlist = await this.prismaService.playlist.findUnique({
             where: { playlist_id: id },
             include: {
@@ -81,6 +85,30 @@ export class PlaylistsService {
         }
 
         return playlist;
+    }
+
+    async getPlaylistTracks(id: string) {
+        // First, get the playlist to find its platform and external ID
+        const playlist = await this.findOne(id);
+
+        // Get the platform name to determine which service to use
+        const platformName = playlist.platform?.name?.toLowerCase();
+
+        if (platformName === 'spotify') {
+            // Use Spotify service to get playlist tracks
+            return this.spotifyAuthService.getPlaylistTracks(
+                playlist.platform_specific_id,
+                playlist.creator_id
+            );
+        } else if (platformName === 'youtube') {
+            // Use YouTube service to get playlist tracks
+            return this.youtubeAuthService.getPlaylistTracks(
+                playlist.platform_specific_id,
+                playlist.creator_id
+            );
+        } else {
+            throw new NotFoundException(`Platform ${platformName} not supported for track fetching`);
+        }
     }
 
     async create(createPlaylistDto: CreatePlaylistDto) {

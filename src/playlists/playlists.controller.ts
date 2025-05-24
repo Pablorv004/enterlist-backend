@@ -37,11 +37,14 @@ export class PlaylistsController {
         @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
     ) {
         return this.playlistsService.findByCreator(creatorId, skip, take);
-    }
-
-    @Get(':id')
+    }    @Get(':id')
     findOne(@Param('id') id: string) {
         return this.playlistsService.findOne(id);
+    }
+
+    @Get(':id/tracks')
+    getPlaylistTracks(@Param('id') id: string) {
+        return this.playlistsService.getPlaylistTracks(id);
     }
 
     @UseGuards(JwtAuthGuard)

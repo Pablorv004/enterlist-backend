@@ -381,10 +381,8 @@ export class YoutubeAuthService {
         } catch (error) {
             throw new BadRequestException(`Failed to fetch playlists: ${error.message}`);
         }
-    }
-
-    // Get user videos from YouTube
-    async getUserVideos(userId: string, limit = 50, offset = 0): Promise<any> {
+    }    // Get user videos from YouTube
+    async getUserVideos(userId: string, limit = 50, offset = 0, musicOnly = false): Promise<any> {
         // Find the YouTube platform
         const youtubePlatform = await this.prismaService.platform.findFirst({
             where: { name: 'YouTube' },
@@ -438,10 +436,46 @@ export class YoutubeAuthService {
                 ),
             );
 
+            // If musicOnly is true, filter videos by music category
+            if (musicOnly && data.items && data.items.length > 0) {
+                const videoIds = data.items.map((item: any) => item.id.videoId).join(',');
+                
+                try {                    const videoDetailsResponse = await firstValueFrom(
+                        this.httpService.get(
+                            `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoIds}`,
+                            { headers }
+                        ).pipe(
+                            catchError(error => {
+                                console.warn('Failed to fetch video details for music filtering:', error.message);
+                                throw new BadRequestException(`Failed to fetch video details: ${error.message}`);
+                            }),
+                        ),
+                    );
+
+                    // Filter videos that are in the Music category (categoryId: "10")
+                    const musicVideoIds = new Set(
+                        videoDetailsResponse.data.items
+                            .filter((video: any) => video.snippet.categoryId === "10")
+                            .map((video: any) => video.id)
+                    );
+
+                    // Filter original results to only include music videos
+                    data.items = data.items.filter((item: any) => musicVideoIds.has(item.id.videoId));
+                } catch (error) {
+                    console.warn('Error filtering videos by music category:', error.message);
+                    // If filtering fails, return all videos
+                }
+            }
+
             return data;
         } catch (error) {
             throw new BadRequestException(`Failed to fetch videos: ${error.message}`);
         }
+    }
+
+    // Get user songs (music videos) from YouTube
+    async getUserSongs(userId: string, limit = 50, offset = 0): Promise<any> {
+        return this.getUserVideos(userId, limit, offset, true);
     }
 
     // Method to refresh an access token when it expires
@@ -494,6 +528,79 @@ export class YoutubeAuthService {
             });
         } catch (error) {
             throw new BadRequestException(`Token refresh failed: ${error.message}`);
+        }
+    }
+
+    // Get tracks for a specific playlist from YouTube
+    async getPlaylistTracks(playlistId: string, userId: string): Promise<any> {
+        // Find the YouTube platform
+        const youtubePlatform = await this.prismaService.platform.findFirst({
+            where: { name: 'YouTube' },
+        });
+
+        if (!youtubePlatform) {
+            throw new NotFoundException('YouTube platform not found in database');
+        }
+
+        // Find the user's linked YouTube account
+        const linkedAccount = await this.prismaService.linkedAccount.findFirst({
+            where: {
+                user_id: userId,
+                platform_id: youtubePlatform.platform_id,
+            },
+        });
+
+        if (!linkedAccount) {
+            throw new NotFoundException('YouTube account not linked for this user');
+        }
+
+        // Check if token is expired and refresh if needed
+        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
+            const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
+            linkedAccount.access_token = refreshedAccount.access_token;
+        }
+
+        // Fetch playlist items from YouTube API
+        const headers = {
+            'Authorization': `Bearer ${linkedAccount.access_token}`,
+        };
+
+        try {
+            const { data } = await firstValueFrom(
+                this.httpService.get(
+                    `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${playlistId}&maxResults=50`,
+                    { headers }
+                ).pipe(
+                    catchError(error => {
+                        throw new BadRequestException(`Failed to fetch YouTube playlist tracks: ${error.message}`);
+                    }),
+                ),
+            );
+
+            // Transform the data to include additional track information
+            const tracks = data.items.map((item: any) => ({
+                track_id: item.contentDetails.videoId,
+                title: item.snippet.title,
+                artist: item.snippet.videoOwnerChannelTitle || item.snippet.channelTitle,
+                duration_ms: null, // YouTube API requires separate call for duration
+                thumbnail_url: item.snippet.thumbnails?.default?.url || item.snippet.thumbnails?.medium?.url,
+                url: `https://www.youtube.com/watch?v=${item.contentDetails.videoId}`,
+                platform_specific_id: item.contentDetails.videoId,
+                added_at: item.snippet.publishedAt,
+                description: item.snippet.description,
+                position: item.snippet.position,
+                type: 'youtube'
+            }));
+
+            return {
+                tracks,
+                total: data.pageInfo?.totalResults || data.items.length,
+                limit: data.pageInfo?.resultsPerPage || 50,
+                nextPageToken: data.nextPageToken,
+                prevPageToken: data.prevPageToken
+            };
+        } catch (error) {
+            throw new BadRequestException(`Failed to fetch playlist tracks: ${error.message}`);
         }
     }
 }
