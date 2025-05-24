@@ -118,12 +118,14 @@ export class SpotifyAuthService {
                 include: {
                     user: true,
                 },
-            });
-
-            if (existingAccount) {
+            });            if (existingAccount) {
                 // User already exists, just return their account
                 userId = existingAccount.user_id;
-                return this.authService.generateToken(existingAccount.user);
+                const tokenResult = this.authService.generateToken(existingAccount.user);
+                return {
+                    ...tokenResult,
+                    isNewUser: false
+                };
             }
 
             // Register a new user with Spotify info
@@ -181,7 +183,7 @@ export class SpotifyAuthService {
         } else {
             // Create new link
             await this.linkedAccountsService.create(linkedAccountData);
-        }        // For new users, return auth token
+        }        // For new users, return auth token with isNewUser flag
         if (isNewUser) {
             const user = await this.prismaService.user.findUnique({
                 where: { user_id: userId },
@@ -191,10 +193,14 @@ export class SpotifyAuthService {
                 throw new NotFoundException('User not found');
             }
             
-            return this.authService.generateToken(user);
+            const tokenResult = this.authService.generateToken(user);
+            return {
+                ...tokenResult,
+                isNewUser: true
+            };
         }
 
-        return { success: true };
+        return { success: true, isNewUser: false };
     }
 
     private async exchangeCodeForTokens(code: string): Promise<any> {
