@@ -118,14 +118,12 @@ export class SpotifyAuthService {
                 include: {
                     user: true,
                 },
-            });            if (existingAccount) {
+            });
+
+            if (existingAccount) {
                 // User already exists, just return their account
                 userId = existingAccount.user_id;
-                const tokenResult = this.authService.generateToken(existingAccount.user);
-                return {
-                    ...tokenResult,
-                    isNewUser: false
-                };
+                return this.authService.generateToken(existingAccount.user);
             }
 
             // Register a new user with Spotify info

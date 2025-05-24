@@ -185,7 +185,9 @@ export class YoutubeAuthService {
         } else {
             // Create new link
             await this.linkedAccountsService.create(linkedAccountData);
-        }        // For new users, return auth token with isNewUser flag
+        }
+
+        // For new users, return auth token
         if (isNewUser) {
             const user = await this.prismaService.user.findUnique({
                 where: { user_id: userId },
@@ -195,14 +197,10 @@ export class YoutubeAuthService {
                 throw new NotFoundException('User not found');
             }
             
-            const tokenResult = this.authService.generateToken(user);
-            return {
-                ...tokenResult,
-                isNewUser: true
-            };
+            return this.authService.generateToken(user);
         }
 
-        return { success: true, isNewUser: false };
+        return { success: true };
     }
 
     private async exchangeCodeForTokens(code: string): Promise<any> {
