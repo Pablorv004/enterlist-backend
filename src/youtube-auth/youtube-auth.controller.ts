@@ -16,6 +16,11 @@ export class YoutubeAuthController {
     async login(@Req() req, @Res() res: Response) {
         const authUrl = await this.youtubeAuthService.getAuthorizationUrl(req.user.user_id);
         return res.redirect(authUrl);
+    }    @Get('login-url')
+    @UseGuards(JwtAuthGuard)
+    async getLoginUrl(@Req() req) {
+        const authUrl = await this.youtubeAuthService.getAuthorizationUrl(req.user.user_id);
+        return { url: authUrl };
     }
 
     @Get('register-or-login')
@@ -23,7 +28,7 @@ export class YoutubeAuthController {
         // This endpoint doesn't require authentication as it's for new users
         const authUrl = await this.youtubeAuthService.getAuthorizationUrl();
         return res.redirect(authUrl);
-    }    @Get('callback')
+    }@Get('callback')
     async callback(
         @Query('code') code: string,
         @Query('state') state: string,
