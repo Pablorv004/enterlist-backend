@@ -80,10 +80,10 @@ export class SubmissionsService {
         return { data, total, skip, take };
     }
 
-    async findByPlaylist(playlistId: string, skip = 0, take = 10) {
+    async findByPlaylist(playlistId: string, skip = 0, take = 10, status?: submission_status) {
         const [data, total] = await Promise.all([
             this.prismaService.submission.findMany({
-                where: { playlist_id: playlistId },
+                where: { playlist_id: playlistId, ...(status ? { status } : {}) },
                 skip,
                 take,
                 include: {

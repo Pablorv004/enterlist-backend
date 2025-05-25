@@ -48,8 +48,9 @@ export class SubmissionsController {
         @Param('playlistId') playlistId: string,
         @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
         @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
+        @Query('status') status?: submission_status,
     ) {
-        return this.submissionsService.findByPlaylist(playlistId, skip, take);
+        return this.submissionsService.findByPlaylist(playlistId, skip, take, status);
     }
 
     @UseGuards(JwtAuthGuard)
