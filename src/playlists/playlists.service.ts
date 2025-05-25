@@ -267,12 +267,10 @@ export class PlaylistsService {
                     platform_id: platformId,
                     platform_specific_id: externalPlaylist.id,
                     name: externalPlaylist.name || externalPlaylist.snippet?.title || 'Untitled Playlist',
-                    description: externalPlaylist.description || externalPlaylist.snippet?.description || undefined,
-                    url: this.getPlaylistUrl(externalPlaylist, platformName) || undefined,
+                    description: externalPlaylist.description || externalPlaylist.snippet?.description || undefined,                    url: this.getPlaylistUrl(externalPlaylist, platformName) || undefined,
                     cover_image_url: this.getPlaylistCoverImage(externalPlaylist, platformName) || undefined,
                     is_visible: true, // Default to visible
                     genre: undefined,
-                    follower_count: this.getFollowerCount(externalPlaylist, platformName) || undefined,
                     submission_fee: 0, // Default fee
                 };
 
@@ -285,12 +283,10 @@ export class PlaylistsService {
                         platform_id: platformId,
                         platform_specific_id: externalPlaylist.id,
                         name: externalPlaylist.name || externalPlaylist.snippet?.title || 'Untitled Playlist',
-                        description: externalPlaylist.description || externalPlaylist.snippet?.description || undefined,
-                        url: this.getPlaylistUrl(externalPlaylist, platformName) || undefined,
+                        description: externalPlaylist.description || externalPlaylist.snippet?.description || undefined,                        url: this.getPlaylistUrl(externalPlaylist, platformName) || undefined,
                         cover_image_url: this.getPlaylistCoverImage(externalPlaylist, platformName) || undefined,
                         is_visible: true,
                         genre: undefined,
-                        follower_count: this.getFollowerCount(externalPlaylist, platformName) || undefined,
                         submission_fee: 0,
                         created_at: new Date(),
                         updated_at: new Date(),
@@ -339,18 +335,7 @@ export class PlaylistsService {
                    playlist.snippet?.thumbnails?.default?.url || undefined;
         }
         return undefined;
-    }
-
-    private getFollowerCount(playlist: any, platformName: string): number | undefined {
-        if (platformName === 'spotify') {
-            return playlist.followers?.total || 0;
-        }
-        // YouTube doesn't provide follower count for playlists in the same way
-        // We could use channel subscriber count if available, but it's not playlist-specific
-        return undefined;
-    }
-
-    // Add new method to get creator name for YouTube
+    }    // Add new method to get creator name for YouTube
     private getCreatorName(playlist: any, platformName: string): string | undefined {
         if (platformName === 'spotify') {
             return playlist.owner?.display_name || undefined;

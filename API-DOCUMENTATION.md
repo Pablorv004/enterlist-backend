@@ -238,9 +238,6 @@ This document provides comprehensive documentation for all endpoints in the Ente
   }
 }
 ```
-
-**Note:** Unlike Spotify playlists, YouTube playlists don't have follower counts. Instead, channel information (creator name, subscriber count) is provided for display purposes.
-
 ---
 
 ## Users
@@ -425,7 +422,6 @@ This document provides comprehensive documentation for all endpoints in the Ente
       "cover_image_url": "string",
       "is_visible": boolean,
       "genre": "string",
-      "follower_count": number,
       "created_at": "timestamp",
       "updated_at": "timestamp"
     }
@@ -467,7 +463,6 @@ This document provides comprehensive documentation for all endpoints in the Ente
       "cover_image_url": "string",
       "is_visible": boolean,
       "genre": "string",
-      "follower_count": number,
       "created_at": "timestamp",
       "updated_at": "timestamp"
     }
@@ -503,7 +498,6 @@ This document provides comprehensive documentation for all endpoints in the Ente
   "cover_image_url": "string",
   "is_visible": boolean,
   "genre": "string",
-  "follower_count": number,
   "created_at": "timestamp",
   "updated_at": "timestamp"
 }
@@ -529,7 +523,6 @@ This document provides comprehensive documentation for all endpoints in the Ente
   "cover_image_url": "string", // Optional
   "is_visible": boolean, // Optional
   "genre": "string", // Optional
-  "follower_count": number // Optional
 }
 ```
 
@@ -548,7 +541,6 @@ This document provides comprehensive documentation for all endpoints in the Ente
   "cover_image_url": "string",
   "is_visible": boolean,
   "genre": "string",
-  "follower_count": number,
   "created_at": "timestamp",
   "updated_at": "timestamp"
 }
@@ -574,7 +566,6 @@ This document provides comprehensive documentation for all endpoints in the Ente
   "cover_image_url": "string", // Optional
   "is_visible": boolean, // Optional
   "genre": "string", // Optional
-  "follower_count": number // Optional
 }
 ```
 
@@ -593,7 +584,6 @@ This document provides comprehensive documentation for all endpoints in the Ente
   "cover_image_url": "string",
   "is_visible": boolean,
   "genre": "string",
-  "follower_count": number,
   "created_at": "timestamp",
   "updated_at": "timestamp"
 }

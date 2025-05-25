@@ -50,9 +50,6 @@ export class CreatePlaylistDto {
     @IsOptional()
     genre?: string;
 
-    @IsPositive()
-    @IsOptional()
-    follower_count?: number;
 }
 
 export class UpdatePlaylistDto {
@@ -83,10 +80,6 @@ export class UpdatePlaylistDto {
     @IsString()
     @IsOptional()
     genre?: string;
-
-    @IsPositive()
-    @IsOptional()
-    follower_count?: number;
 }
 
 export class ImportPlaylistsDto {

@@ -767,11 +767,9 @@ export class YoutubeAuthService {
                         name: playlist.snippet.title,
                         description: playlist.snippet.description || null,
                         url: `https://www.youtube.com/playlist?list=${playlistId}`,
-                        cover_image_url: playlist.snippet.thumbnails?.medium?.url || 
-                                       playlist.snippet.thumbnails?.default?.url || null,
+                        cover_image_url: playlist.snippet.thumbnails?.medium?.url ||                        playlist.snippet.thumbnails?.default?.url || null,
                         is_visible: true,
                         genre: null,
-                        follower_count: 0, // YouTube doesn't provide playlist follower count
                         submission_fee: 0,
                         created_at: new Date(),
                         updated_at: new Date(),

@@ -66,7 +66,6 @@ model Playlist {
   cover_image_url      String?       @db.VarChar
   is_visible           Boolean?      @default(true)
   genre                String?       @db.VarChar
-  follower_count       Int?
   created_at           DateTime      @db.Timestamptz(6)
   updated_at           DateTime      @db.Timestamptz(6)
   submission_fee       Decimal       @db.Decimal(10, 2)
