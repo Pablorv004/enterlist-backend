@@ -274,8 +274,7 @@ export class YoutubeAuthService {
             return { items: [] };
         }
     }
-    
-    private cleanExpiredStates(): void {
+      private cleanExpiredStates(): void {
         const now = new Date();
         for (const [key, value] of this.stateMap.entries()) {
             if (value.expiresAt < now) {
@@ -284,7 +283,23 @@ export class YoutubeAuthService {
         }
     }
 
-    // Get user channels from YouTube
+    // Helper method to handle token refresh with proper error handling
+    private async ensureValidToken(linkedAccount: any, userId: string, platformId: number): Promise<string> {
+        // Check if token is expired and refresh if needed
+        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
+            try {
+                const refreshedAccount = await this.refreshAccessToken(userId, platformId);
+                return refreshedAccount.access_token;
+            } catch (error) {
+                // If account was deleted due to expired refresh token, re-throw with user-friendly message
+                if (error.message.includes('YouTube account connection expired')) {
+                    throw error;
+                }
+                throw new BadRequestException(`Failed to refresh YouTube access token: ${error.message}`);
+            }
+        }
+        return linkedAccount.access_token;
+    }// Get user channels from YouTube
     async getUserChannels(userId: string, limit = 50, offset = 0): Promise<any> {
         // Find the YouTube platform
         const youtubePlatform = await this.prismaService.platform.findFirst({
@@ -301,17 +316,10 @@ export class YoutubeAuthService {
                 user_id: userId,
                 platform_id: youtubePlatform.platform_id,
             },
-        });
-
-        if (!linkedAccount) {
+        });        if (!linkedAccount) {
             throw new NotFoundException('YouTube account not linked for this user');
-        }
-
-        // Check if token is expired and refresh if needed
-        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
-            const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
-            linkedAccount.access_token = refreshedAccount.access_token;
-        }        // Fetch channels from YouTube API
+        }        // Ensure we have a valid access token
+        const accessToken = await this.ensureValidToken(linkedAccount, userId, youtubePlatform.platform_id);// Fetch channels from YouTube API
         try {
             const params = new URLSearchParams({
                 part: 'snippet,contentDetails,statistics',
@@ -320,7 +328,7 @@ export class YoutubeAuthService {
             });
 
             const headers = {
-                'Authorization': `Bearer ${linkedAccount.access_token}`,
+                'Authorization': `Bearer ${accessToken}`,
             };
 
             const { data } = await firstValueFrom(
@@ -358,13 +366,8 @@ export class YoutubeAuthService {
 
         if (!linkedAccount) {
             throw new NotFoundException('YouTube account not linked for this user');
-        }
-
-        // Check if token is expired and refresh if needed
-        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
-            const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
-            linkedAccount.access_token = refreshedAccount.access_token;
-        }
+        }        // Ensure we have a valid access token
+        const accessToken = await this.ensureValidToken(linkedAccount, userId, youtubePlatform.platform_id);
 
         try {
             const params = new URLSearchParams({
@@ -379,7 +382,7 @@ export class YoutubeAuthService {
             }
 
             const headers = {
-                'Authorization': `Bearer ${linkedAccount.access_token}`,
+                'Authorization': `Bearer ${accessToken}`,
             };
 
             const { data } = await firstValueFrom(
@@ -443,11 +446,8 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube account not linked for this user');
         }
 
-        // Check if token is expired and refresh if needed
-        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
-            const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
-            linkedAccount.access_token = refreshedAccount.access_token;
-        }
+        // Ensure we have a valid access token
+        const accessToken = await this.ensureValidToken(linkedAccount, userId, youtubePlatform.platform_id);
 
         // First, get the user's channel ID
         const channelsResponse = await this.getUserChannels(userId);
@@ -456,11 +456,9 @@ export class YoutubeAuthService {
             throw new BadRequestException('No YouTube channels found for this user');
         }
         
-        const channelId = channelsResponse.items[0].id;
-
-        // Fetch videos from YouTube API
+        const channelId = channelsResponse.items[0].id;        // Fetch videos from YouTube API
         const headers = {
-            'Authorization': `Bearer ${linkedAccount.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
         };
 
         try {
@@ -515,9 +513,7 @@ export class YoutubeAuthService {
     // Get user songs (music videos) from YouTube
     async getUserSongs(userId: string, limit = 50, offset = 0): Promise<any> {
         return this.getUserVideos(userId, limit, offset, true);
-    }
-
-    // Method to refresh an access token when it expires
+    }    // Method to refresh an access token when it expires
     async refreshAccessToken(userId: string, platformId: number): Promise<any> {
         // Find the linked account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
@@ -546,7 +542,16 @@ export class YoutubeAuthService {
                     },
                 }).pipe(
                     catchError(error => {
-                        throw new BadRequestException(`Failed to refresh token: ${error.message}`);
+                        // Check if the error indicates an invalid refresh token
+                        const errorMessage = error.response?.data?.error || error.message;
+                        if (errorMessage.includes('invalid_grant') || 
+                            errorMessage.includes('invalid_request') ||
+                            errorMessage.includes('unauthorized_client') ||
+                            error.response?.status === 400 ||
+                            error.response?.status === 401) {
+                            throw new Error('REFRESH_TOKEN_EXPIRED');
+                        }
+                        throw new BadRequestException(`Failed to refresh token: ${errorMessage}`);
                     }),
                 ),
             );
@@ -566,6 +571,14 @@ export class YoutubeAuthService {
                 },
             });
         } catch (error) {
+            // If refresh token is expired or invalid, delete the linked account
+            if (error.message === 'REFRESH_TOKEN_EXPIRED') {
+                console.warn(`YouTube refresh token expired for user ${userId}, removing linked account`);
+                await this.prismaService.linkedAccount.delete({
+                    where: { linked_account_id: linkedAccount.linked_account_id },
+                });
+                throw new NotFoundException('YouTube account connection expired. Please reconnect your account.');
+            }
             throw new BadRequestException(`Token refresh failed: ${error.message}`);
         }
     }    // Get tracks for a specific playlist from YouTube
@@ -591,11 +604,8 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube account not linked for this user');
         }
 
-        // Check if token is expired and refresh if needed
-        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
-            const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
-            linkedAccount.access_token = refreshedAccount.access_token;
-        }
+        // Ensure we have a valid access token
+        const accessToken = await this.ensureValidToken(linkedAccount, userId, youtubePlatform.platform_id);
 
         try {
             let allTracks = [];
@@ -613,15 +623,13 @@ export class YoutubeAuthService {
                     playlistId: playlistId,
                     maxResults: maxResults.toString(),
                     key: this.apiKey
-                });
-
-                if (nextPageToken) {
+                });                if (nextPageToken) {
                     params.append('pageToken', nextPageToken);
                 }
 
                 const headers = {
-                    'Authorization': `Bearer ${linkedAccount.access_token}`,
-                };                const { data } = await firstValueFrom(
+                    'Authorization': `Bearer ${accessToken}`,
+                };const { data } = await firstValueFrom(
                     this.httpService.get(
                         `https://www.googleapis.com/youtube/v3/playlistItems?${params.toString()}`,
                         { headers }
@@ -685,9 +693,7 @@ export class YoutubeAuthService {
         } catch (error) {
             throw new BadRequestException(`Failed to fetch playlist tracks: ${error.message}`);
         }
-    }
-
-    // Import playlists to the database
+    }    // Import playlists to the database
     async importPlaylistsToDatabase(userId: string, playlistIds: string[]): Promise<any> {
         // Find the YouTube platform
         const youtubePlatform = await this.prismaService.platform.findFirst({
@@ -710,14 +716,11 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube account not linked for this user');
         }
 
-        // Check if token is expired and refresh if needed
-        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
-            const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
-            linkedAccount.access_token = refreshedAccount.access_token;
-        }
+        // Ensure we have a valid access token
+        const accessToken = await this.ensureValidToken(linkedAccount, userId, youtubePlatform.platform_id);
 
         const headers = {
-            'Authorization': `Bearer ${linkedAccount.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
         };
 
         const importedPlaylists: any[] = [];
@@ -817,9 +820,7 @@ export class YoutubeAuthService {
             skipped: skippedPlaylists,
             message: `Successfully imported ${importedPlaylists.length} playlist(s). ${skippedPlaylists.length} playlist(s) were skipped.`
         };
-    }
-
-    // Import videos to the database (as songs)
+    }    // Import videos to the database (as songs)
     async importVideosToDatabase(userId: string, videoIds: string[]): Promise<any> {
         // Find the YouTube platform
         const youtubePlatform = await this.prismaService.platform.findFirst({
@@ -842,14 +843,11 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube account not linked for this user');
         }
 
-        // Check if token is expired and refresh if needed
-        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
-            const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
-            linkedAccount.access_token = refreshedAccount.access_token;
-        }
+        // Ensure we have a valid access token
+        const accessToken = await this.ensureValidToken(linkedAccount, userId, youtubePlatform.platform_id);
 
         const headers = {
-            'Authorization': `Bearer ${linkedAccount.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
         };
 
         const importedVideos: any[] = [];
