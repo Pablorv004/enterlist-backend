@@ -769,6 +769,7 @@ export class YoutubeAuthService {
                         url: `https://www.youtube.com/playlist?list=${playlistId}`,
                         cover_image_url: playlist.snippet.thumbnails?.medium?.url ||                        playlist.snippet.thumbnails?.default?.url || null,
                         is_visible: true,
+                        track_count: playlist.contentDetails.itemCount || 0,
                         genre: null,
                         submission_fee: 0,
                         created_at: new Date(),

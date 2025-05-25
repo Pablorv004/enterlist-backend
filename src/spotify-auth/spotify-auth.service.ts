@@ -42,8 +42,8 @@ export class SpotifyAuthService {
 
         // If userId is provided, this is for linking to existing account
         // If not, this is for registration/login flow
-        this.stateMap.set(state, { 
-            userId, 
+        this.stateMap.set(state, {
+            userId,
             expiresAt,
             isNewUser: !userId
         });
@@ -85,7 +85,7 @@ export class SpotifyAuthService {
 
         const isNewUser = stateData!.isNewUser;
         let userId = stateData!.userId;
-        
+
         this.stateMap.delete(state);
 
         // Exchange code for access and refresh tokens
@@ -129,11 +129,11 @@ export class SpotifyAuthService {
             // Register a new user with Spotify info
             const email = profile.email || `${profile.id}@spotify.user`;
             const username = profile.display_name || `spotify_user_${profile.id}`;
-            
+
             // Generate a random password - user won't need to know it
             // as they'll log in via Spotify OAuth
             const password = crypto.randomBytes(16).toString('hex');
-            
+
             const registerResult = await this.authService.register({
                 email,
                 username,
@@ -142,10 +142,10 @@ export class SpotifyAuthService {
                 oauth_provider: 'spotify',
                 oauth_id: profile.id,
             });
-            
+
             userId = registerResult.user.id;
         }
-        
+
         if (!userId) {
             throw new UnauthorizedException('User ID not found');
         }
@@ -186,11 +186,11 @@ export class SpotifyAuthService {
             const user = await this.prismaService.user.findUnique({
                 where: { user_id: userId },
             });
-            
+
             if (!user) {
                 throw new NotFoundException('User not found');
             }
-            
+
             const tokenResult = this.authService.generateToken(user);
             return {
                 ...tokenResult,
@@ -247,7 +247,7 @@ export class SpotifyAuthService {
             throw new BadRequestException(`Profile fetch failed: ${error.message}`);
         }
     }
-    
+
     private cleanExpiredStates(): void {
         const now = new Date();
         for (const [key, value] of this.stateMap.entries()) {
@@ -287,7 +287,7 @@ export class SpotifyAuthService {
         // Fetch playlists from Spotify API
         const headers = {
             'Authorization': `Bearer ${linkedAccount.access_token}`,
-        };        try {
+        }; try {
             const { data } = await firstValueFrom(
                 this.httpService.get(`https://api.spotify.com/v1/me/playlists?limit=${limit}&offset=${offset}`, { headers }).pipe(
                     catchError(error => {
@@ -307,12 +307,12 @@ export class SpotifyAuthService {
                     try {
                         const tracksResponse = await firstValueFrom(
                             this.httpService.get(
-                                `https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=50`, 
+                                `https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=50`,
                                 { headers }
-                            ).pipe(                                catchError(error => {
-                                    console.warn(`Failed to fetch tracks for playlist ${playlist.id}:`, error.message);
-                                    return of({ data: { items: [] } });
-                                }),
+                            ).pipe(catchError(error => {
+                                console.warn(`Failed to fetch tracks for playlist ${playlist.id}:`, error.message);
+                                return of({ data: { items: [] } });
+                            }),
                             ),
                         );
 
@@ -421,30 +421,30 @@ export class SpotifyAuthService {
 
         // Get user profile to find artist ID
         const profile = await this.getSpotifyUserProfile(linkedAccount.access_token);
-        
+
         const headers = {
             'Authorization': `Bearer ${linkedAccount.access_token}`,
-        };        try {
+        }; try {
             // First, try to get artist information
             let artistTracks: any[] = [];
-            
+
             // Search for the user as an artist
             try {
                 const searchResponse = await firstValueFrom(
                     this.httpService.get(
-                        `https://api.spotify.com/v1/search?q=${encodeURIComponent(profile.display_name)}&type=artist&limit=1`, 
+                        `https://api.spotify.com/v1/search?q=${encodeURIComponent(profile.display_name)}&type=artist&limit=1`,
                         { headers }
                     )
                 );
 
                 if (searchResponse.data.artists.items.length > 0) {
                     const artistId = searchResponse.data.artists.items[0].id;
-                    
+
                     // Get artist's albums
                     try {
                         const albumsResponse = await firstValueFrom(
                             this.httpService.get(
-                                `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single&limit=${limit}&offset=${offset}`, 
+                                `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single&limit=${limit}&offset=${offset}`,
                                 { headers }
                             )
                         );
@@ -454,7 +454,7 @@ export class SpotifyAuthService {
                             try {
                                 const tracksResponse = await firstValueFrom(
                                     this.httpService.get(
-                                        `https://api.spotify.com/v1/albums/${album.id}/tracks`, 
+                                        `https://api.spotify.com/v1/albums/${album.id}/tracks`,
                                         { headers }
                                     )
                                 );
@@ -582,7 +582,7 @@ export class SpotifyAuthService {
                 allTracks = allTracks.concat(tracks);
                 offset += limit;
                 hasMore = data.next !== null && allTracks.length < data.total;
-                
+
                 // Add small delay to avoid rate limiting
                 if (hasMore) {
                     await new Promise(resolve => setTimeout(resolve, 100));
@@ -676,7 +676,9 @@ export class SpotifyAuthService {
                         name: playlistData.name,
                         description: playlistData.description || null,
                         url: playlistData.external_urls?.spotify || null,
-                        cover_image_url: playlistData.images?.[0]?.url || null,                        is_visible: true,
+                        cover_image_url: playlistData.images?.[0]?.url || null, 
+                        is_visible: true,
+                        track_count: playlistData.tracks?.total || 0,
                         genre: null,
                         submission_fee: 0,
                         created_at: new Date(),
@@ -749,7 +751,7 @@ export class SpotifyAuthService {
         const chunkSize = 50;
         for (let i = 0; i < trackIds.length; i += chunkSize) {
             const chunk = trackIds.slice(i, i + chunkSize);
-            
+
             try {
                 // Fetch track details from Spotify
                 const { data: tracksData } = await firstValueFrom(
