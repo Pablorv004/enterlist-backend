@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaypalService } from '../paypal/paypal.service';
 import { CreatePaymentMethodDto, UpdatePaymentMethodDto } from './dto/payment-method.dto';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -8,7 +7,6 @@ import { v4 as uuidv4 } from 'uuid';
 export class PaymentMethodsService {
     constructor(
         private readonly prismaService: PrismaService,
-        private readonly paypalService: PaypalService
     ) { }
 
     async findAll() {
