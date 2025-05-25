@@ -272,6 +272,7 @@ export class PlaylistsService {
                     is_visible: true, // Default to visible
                     genre: undefined,
                     submission_fee: 0, // Default fee
+                    track_count: this.getPlaylistTrackCount(externalPlaylist, platformName) || 0,
                 };
 
                 // Get creator name for reference (can be used in logs or additional processing)
@@ -288,6 +289,7 @@ export class PlaylistsService {
                         is_visible: true,
                         genre: undefined,
                         submission_fee: 0,
+                        track_count: this.getPlaylistTrackCount(externalPlaylist, platformName) || 0,
                         created_at: new Date(),
                         updated_at: new Date(),
                     },
@@ -341,6 +343,16 @@ export class PlaylistsService {
             return playlist.owner?.display_name || undefined;
         } else if (platformName === 'youtube') {
             return playlist.snippet?.channelTitle || playlist.channelInfo?.channelTitle || undefined;
+        }
+        return undefined;
+    }
+
+    // Add new method to get track count for playlists
+    private getPlaylistTrackCount(playlist: any, platformName: string): number | undefined {
+        if (platformName === 'spotify') {
+            return playlist.tracks?.total || undefined;
+        } else if (platformName === 'youtube') {
+            return playlist.contentDetails?.itemCount || undefined;
         }
         return undefined;
     }

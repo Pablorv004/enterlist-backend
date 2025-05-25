@@ -44,11 +44,13 @@ export class CreatePlaylistDto {
 
     @IsBoolean()
     @IsOptional()
-    is_visible?: boolean;
-
-    @IsString()
+    is_visible?: boolean;    @IsString()
     @IsOptional()
     genre?: string;
+
+    @IsInt()
+    @IsOptional()
+    track_count?: number;
 
 }
 

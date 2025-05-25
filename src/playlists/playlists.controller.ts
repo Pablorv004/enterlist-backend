@@ -61,12 +61,28 @@ export class PlaylistsController {
         @Body() updatePlaylistDto: UpdatePlaylistDto,
     ) {
         return this.playlistsService.update(id, updatePlaylistDto);
-    }
-
-    @UseGuards(JwtAuthGuard)
+    }    @UseGuards(JwtAuthGuard)
     @Delete(':id')
     remove(@Param('id') id: string) {
         return this.playlistsService.remove(id);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Put(':id/submission-fee')
+    updateSubmissionFee(
+        @Param('id') id: string,
+        @Body() body: { submission_fee: number }
+    ) {
+        return this.playlistsService.update(id, { submission_fee: body.submission_fee });
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Put(':id/genre')
+    updateGenre(
+        @Param('id') id: string,
+        @Body() body: { genre: string }
+    ) {
+        return this.playlistsService.update(id, { genre: body.genre });
     }
 
     @UseGuards(JwtAuthGuard)
