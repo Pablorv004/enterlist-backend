@@ -287,9 +287,7 @@ export class SpotifyAuthService {
         // Fetch playlists from Spotify API
         const headers = {
             'Authorization': `Bearer ${linkedAccount.access_token}`,
-        };
-
-        try {
+        };        try {
             const { data } = await firstValueFrom(
                 this.httpService.get(`https://api.spotify.com/v1/me/playlists?limit=${limit}&offset=${offset}`, { headers }).pipe(
                     catchError(error => {
@@ -298,9 +296,14 @@ export class SpotifyAuthService {
                 ),
             );
 
-            // For each playlist, get the tracks
+            // Filter playlists to only show those owned by the user
+            const ownedPlaylists = data.items.filter((playlist) => {
+                return playlist.owner && playlist.owner.id === linkedAccount.external_user_id;
+            });
+
+            // For each owned playlist, get the tracks
             const playlistsWithTracks = await Promise.all(
-                data.items.map(async (playlist) => {
+                ownedPlaylists.map(async (playlist) => {
                     try {
                         const tracksResponse = await firstValueFrom(
                             this.httpService.get(
@@ -329,7 +332,8 @@ export class SpotifyAuthService {
 
             return {
                 ...data,
-                items: playlistsWithTracks
+                items: playlistsWithTracks,
+                total: ownedPlaylists.length // Update total to reflect filtered results
             };
         } catch (error) {
             throw new BadRequestException(`Failed to fetch playlists: ${error.message}`);
