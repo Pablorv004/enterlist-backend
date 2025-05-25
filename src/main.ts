@@ -11,7 +11,7 @@ async function bootstrap() {
   // Configure CORS with specific options for security
   app.enableCors({
     origin: [
-      process.env.FRONTEND_URL, 'http://localhost:5173', 
+      process.env.FRONTEND_URL, 'http://localhost:5173', 'https://localhost',
       'https://accounts.spotify.com',
       'https://api.spotify.com',
       'https://accounts.google.com',
