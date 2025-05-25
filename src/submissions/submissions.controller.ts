@@ -71,6 +71,12 @@ export class SubmissionsController {
     }
 
     @UseGuards(JwtAuthGuard)
+    @Get('earnings/creator/:creatorId')
+    getEarningsStatsByCreator(@Param('creatorId') creatorId: string) {
+        return this.submissionsService.getEarningsStatsByCreator(creatorId);
+    }
+
+    @UseGuards(JwtAuthGuard)
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.submissionsService.findOne(id);

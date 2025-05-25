@@ -306,9 +306,7 @@ export class SubmissionsService {
         return this.prismaService.submission.delete({
             where: { submission_id: id },
         });
-    }
-
-    async getSubmissionStatsByCreator(creatorId: string) {
+    }    async getSubmissionStatsByCreator(creatorId: string) {
         const stats = await this.prismaService.submission.groupBy({
             by: ['playlist_id', 'status'],
             where: {
@@ -383,6 +381,63 @@ export class SubmissionsService {
         });
 
         return playlistStats;
+    }
+
+    async getEarningsStatsByCreator(creatorId: string) {
+        // Get the last 12 months of earnings data
+        const twelveMonthsAgo = new Date();
+        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+        const earningsData = await this.prismaService.transaction.findMany({
+            where: {
+                submission: {
+                    playlist: {
+                        creator_id: creatorId
+                    },
+                    status: 'approved'
+                },
+                status: 'succeeded',
+                created_at: {
+                    gte: twelveMonthsAgo
+                }
+            },
+            select: {
+                creator_payout_amount: true,
+                created_at: true
+            },
+            orderBy: {
+                created_at: 'asc'
+            }
+        });
+
+        // Group by month
+        const monthlyEarnings: Record<string, number> = {};
+        
+        // Initialize all 12 months with 0
+        for (let i = 11; i >= 0; i--) {
+            const date = new Date();
+            date.setMonth(date.getMonth() - i);
+            const monthKey = date.toISOString().substring(0, 7); // YYYY-MM format
+            monthlyEarnings[monthKey] = 0;
+        }        // Aggregate earnings by month
+        earningsData.forEach(transaction => {
+            const monthKey = transaction.created_at.toISOString().substring(0, 7);
+            const amount = typeof transaction.creator_payout_amount === 'object' 
+                ? Number(transaction.creator_payout_amount) 
+                : (transaction.creator_payout_amount || 0);
+            monthlyEarnings[monthKey] += amount;
+        });
+
+        // Convert to array format with month names
+        const result = Object.entries(monthlyEarnings).map(([monthKey, amount]) => {
+            const date = new Date(monthKey + '-01');
+            return {
+                month: date.toLocaleDateString('en-US', { month: 'short' }),
+                amount: amount / 100 // Convert from cents to dollars
+            };
+        });
+
+        return result;
     }
 }
 
