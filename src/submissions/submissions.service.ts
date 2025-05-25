@@ -307,5 +307,82 @@ export class SubmissionsService {
             where: { submission_id: id },
         });
     }
+
+    async getSubmissionStatsByCreator(creatorId: string) {
+        const stats = await this.prismaService.submission.groupBy({
+            by: ['playlist_id', 'status'],
+            where: {
+                playlist: {
+                    creator_id: creatorId
+                }
+            },
+            _count: {
+                submission_id: true
+            }
+        });
+
+        // Also get total earnings per playlist
+        const earnings = await this.prismaService.transaction.groupBy({
+            by: ['submission_id'],
+            where: {
+                submission: {
+                    playlist: {
+                        creator_id: creatorId
+                    }
+                },
+                status: 'succeeded'
+            },
+            _sum: {
+                creator_payout_amount: true
+            }
+        });
+
+        // Organize the data by playlist
+        const playlistStats: Record<string, any> = {};
+
+        // Process submission counts by status
+        stats.forEach(stat => {
+            if (!playlistStats[stat.playlist_id]) {
+                playlistStats[stat.playlist_id] = {
+                    submissions: 0,
+                    pending: 0,
+                    under_review: 0,
+                    approved: 0,
+                    rejected: 0,
+                    earnings: 0
+                };
+            }
+
+            playlistStats[stat.playlist_id].submissions += stat._count.submission_id;
+            playlistStats[stat.playlist_id][stat.status] = stat._count.submission_id;
+        });
+
+        // Process earnings (we'll need to join with submissions to get playlist_id)
+        const submissionEarnings = await this.prismaService.submission.findMany({
+            where: {
+                playlist: {
+                    creator_id: creatorId
+                },
+                transaction: {
+                    status: 'succeeded'
+                }
+            },
+            include: {
+                transaction: {
+                    select: {
+                        creator_payout_amount: true
+                    }
+                }
+            }
+        });
+
+        submissionEarnings.forEach(submission => {
+            if (playlistStats[submission.playlist_id] && submission.transaction) {
+                playlistStats[submission.playlist_id].earnings += submission.transaction.creator_payout_amount || 0;
+            }
+        });
+
+        return playlistStats;
+    }
 }
 
