@@ -311,12 +311,8 @@ export class YoutubeAuthService {
         if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
             const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
             linkedAccount.access_token = refreshedAccount.access_token;
-        }
-
-        // Fetch channels from YouTube API
-        const headers = {
-            'Authorization': `Bearer ${linkedAccount.access_token}`,
-        };        try {
+        }        // Fetch channels from YouTube API
+        try {
             const params = new URLSearchParams({
                 part: 'snippet,contentDetails,statistics',
                 mine: 'true',
@@ -370,10 +366,7 @@ export class YoutubeAuthService {
             linkedAccount.access_token = refreshedAccount.access_token;
         }
 
-        // Fetch playlists from YouTube API
-        const headers = {
-            'Authorization': `Bearer ${linkedAccount.access_token}`,
-        };        try {
+        try {
             const params = new URLSearchParams({
                 part: 'snippet,contentDetails',
                 mine: 'true',
@@ -399,6 +392,29 @@ export class YoutubeAuthService {
                     }),
                 ),
             );
+
+            // Enhance playlist data with channel information for display purposes
+            if (data.items && data.items.length > 0) {
+                // Get channel info for creator name
+                try {
+                    const channelResponse = await this.getUserChannels(userId);
+                    const channelInfo = channelResponse.items?.[0];
+                    
+                    if (channelInfo) {
+                        data.items = data.items.map(playlist => ({
+                            ...playlist,
+                            channelInfo: {
+                                subscriberCount: channelInfo.statistics?.subscriberCount,
+                                viewCount: channelInfo.statistics?.viewCount,
+                                channelTitle: channelInfo.snippet?.title
+                            }
+                        }));
+                    }
+                } catch (error) {
+                    // If channel info fails, continue without it
+                    console.warn('Failed to fetch channel info for playlists:', error.message);
+                }
+            }
 
             return data;
         } catch (error) {
@@ -605,9 +621,7 @@ export class YoutubeAuthService {
 
                 const headers = {
                     'Authorization': `Bearer ${linkedAccount.access_token}`,
-                };
-
-                const { data } = await firstValueFrom(
+                };                const { data } = await firstValueFrom(
                     this.httpService.get(
                         `https://www.googleapis.com/youtube/v3/playlistItems?${params.toString()}`,
                         { headers }

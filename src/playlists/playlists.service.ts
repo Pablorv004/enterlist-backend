@@ -274,7 +274,10 @@ export class PlaylistsService {
                     genre: undefined,
                     follower_count: this.getFollowerCount(externalPlaylist, platformName) || undefined,
                     submission_fee: 0, // Default fee
-                };                // Create the playlist
+                };
+
+                // Get creator name for reference (can be used in logs or additional processing)
+                const creatorName = this.getCreatorName(externalPlaylist, platformName);// Create the playlist
                 const newPlaylist = await this.prismaService.playlist.create({
                     data: {
                         playlist_id: uuidv4(),
@@ -343,6 +346,17 @@ export class PlaylistsService {
             return playlist.followers?.total || 0;
         }
         // YouTube doesn't provide follower count for playlists in the same way
-        return 0;
+        // We could use channel subscriber count if available, but it's not playlist-specific
+        return undefined;
+    }
+
+    // Add new method to get creator name for YouTube
+    private getCreatorName(playlist: any, platformName: string): string | undefined {
+        if (platformName === 'spotify') {
+            return playlist.owner?.display_name || undefined;
+        } else if (platformName === 'youtube') {
+            return playlist.snippet?.channelTitle || playlist.channelInfo?.channelTitle || undefined;
+        }
+        return undefined;
     }
 }

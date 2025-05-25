@@ -190,6 +190,57 @@ This document provides comprehensive documentation for all endpoints in the Ente
     }
     ```
 
+### Get YouTube Playlists
+
+**Endpoint:** `GET /api/auth/youtube/playlists`
+
+**Description:** Retrieves the user's YouTube playlists with enhanced channel information.
+
+**Authentication Required:** Yes (JWT)
+
+**Query Parameters:**
+- `limit` (optional): Number of playlists to return (default: 50)
+- `offset` (optional): Offset for pagination (default: 0)
+
+**Response:**
+- **Status Code:** 200 (OK)
+- **Body:** YouTube API response containing the user's playlists with additional channel information
+```json
+{
+  "items": [
+    {
+      "id": "string",
+      "snippet": {
+        "title": "string",
+        "description": "string",
+        "channelId": "string",
+        "channelTitle": "string",
+        "publishedAt": "timestamp",
+        "thumbnails": {
+          "default": { "url": "string", "width": number, "height": number },
+          "medium": { "url": "string", "width": number, "height": number },
+          "high": { "url": "string", "width": number, "height": number }
+        }
+      },
+      "contentDetails": {
+        "itemCount": number
+      },
+      "channelInfo": {
+        "subscriberCount": "string",
+        "viewCount": "string",
+        "channelTitle": "string"
+      }
+    }
+  ],
+  "pageInfo": {
+    "totalResults": number,
+    "resultsPerPage": number
+  }
+}
+```
+
+**Note:** Unlike Spotify playlists, YouTube playlists don't have follower counts. Instead, channel information (creator name, subscriber count) is provided for display purposes.
+
 ---
 
 ## Users
