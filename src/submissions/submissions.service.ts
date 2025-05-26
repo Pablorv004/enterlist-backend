@@ -109,8 +109,20 @@ export class SubmissionsService {
         return { data, total, skip, take };
     }
 
-    async findByCreator(creatorId: string, skip = 0, take = 10, status?: submission_status) {
-        const where = status ? { status, playlist: { creator_id: creatorId } } : { playlist: { creator_id: creatorId } };
+    async findByCreator(creatorId: string, skip = 0, take = 10, status?: submission_status, playlistId?: string) {
+        const where: any = { 
+            playlist: { creator_id: creatorId } 
+        };
+
+        // Add status filter if provided
+        if (status) {
+            where.status = status;
+        }
+
+        // Add playlist filter if provided
+        if (playlistId) {
+            where.playlist_id = playlistId;
+        }
 
         const [data, total] = await Promise.all([
             this.prismaService.submission.findMany({
@@ -133,6 +145,8 @@ export class SubmissionsService {
                         select: {
                             title: true,
                             artist_name_on_platform: true,
+                            url: true,
+                            cover_image_url: true,
                         },
                     },
                 },

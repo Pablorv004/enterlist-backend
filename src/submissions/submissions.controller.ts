@@ -61,12 +61,13 @@ export class SubmissionsController {
         @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
         @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
         @Query('status') status?: submission_status,
+        @Query('playlistId') playlistId?: string,
     ) {
         // Validate the creatorId before proceeding
         if (!creatorId || creatorId === 'undefined') {
             return { data: [], total: 0, skip, take };
         }
-        return this.submissionsService.findByCreator(creatorId, skip, take, status);
+        return this.submissionsService.findByCreator(creatorId, skip, take, status, playlistId);
     }    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     @Get('stats/creator/:creatorId')
     getSubmissionStatsByCreator(@Param('creatorId') creatorId: string) {
