@@ -283,7 +283,7 @@ export class PlaylistsService {
         }
 
         const importedPlaylists: any[] = [];
-        const skippedPlaylists: any[] = [];
+        const refreshedPlaylists: any[] = [];
 
         // Process each playlist
         for (const externalPlaylist of externalPlaylists) {
@@ -297,11 +297,30 @@ export class PlaylistsService {
                 });
 
                 if (existingPlaylist) {
-                    skippedPlaylists.push({
-                        id: externalPlaylist.id,
-                        name: externalPlaylist.name || externalPlaylist.snippet?.title,
-                        reason: 'Already exists'
+                    // Refresh existing playlist with updated data
+                    const updatedPlaylist = await this.prismaService.playlist.update({
+                        where: { playlist_id: existingPlaylist.playlist_id },
+                        data: {
+                            name: externalPlaylist.name || externalPlaylist.snippet?.title || 'Untitled Playlist',
+                            description: externalPlaylist.description || externalPlaylist.snippet?.description || undefined,
+                            url: this.getPlaylistUrl(externalPlaylist, platformName) || undefined,
+                            cover_image_url: this.getPlaylistCoverImage(externalPlaylist, platformName) || undefined,
+                            track_count: this.getPlaylistTrackCount(externalPlaylist, platformName) || 0,
+                            deleted: false, // Ensure playlist is not marked as deleted
+                            updated_at: new Date(),
+                        },
+                        include: {
+                            creator: {
+                                select: {
+                                    username: true,
+                                    email: true,
+                                },
+                            },
+                            platform: true,
+                        },
                     });
+
+                    refreshedPlaylists.push(updatedPlaylist);
                     continue;
                 }                // Create playlist data based on platform
                 const playlistData: CreatePlaylistDto = {
@@ -349,18 +368,13 @@ export class PlaylistsService {
                 importedPlaylists.push(newPlaylist);
             } catch (error) {
                 console.error(`Failed to import playlist ${externalPlaylist.id}:`, error);
-                skippedPlaylists.push({
-                    id: externalPlaylist.id,
-                    name: externalPlaylist.name || externalPlaylist.snippet?.title,
-                    reason: 'Import failed'
-                });
             }
         }
 
         return {
             imported: importedPlaylists,
-            skipped: skippedPlaylists,
-            message: `Successfully imported ${importedPlaylists.length} playlist(s). ${skippedPlaylists.length} playlist(s) were skipped.`
+            refreshed: refreshedPlaylists,
+            message: `Successfully imported ${importedPlaylists.length} new playlist(s) and refreshed ${refreshedPlaylists.length} existing playlist(s).`
         };
     }    private getPlaylistUrl(playlist: any, platformName: string): string | undefined {
         if (platformName === 'spotify') {
