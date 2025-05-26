@@ -53,11 +53,15 @@ export class UsersController {
     @Delete(':id')
     remove(@Param('id') id: string) {
         return this.usersService.remove(id);
+    }    @UseGuards(JwtAuthGuard)
+    @Put('role/update')
+    updateRole(@Req() req, @Body() updateRoleDto: UpdateRoleDto) {
+        return this.usersService.updateRole(req.user.user_id, updateRoleDto.role);
     }
 
     @UseGuards(JwtAuthGuard)
-    @Put('role/update')
-    updateRole(@Req() req, @Body() updateRoleDto: UpdateRoleDto) {
+    @Post('select-role')
+    selectRole(@Req() req, @Body() updateRoleDto: UpdateRoleDto) {
         return this.usersService.updateRole(req.user.user_id, updateRoleDto.role);
     }
 }
