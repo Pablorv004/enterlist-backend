@@ -16,6 +16,7 @@ export class PlaylistsService {
             this.prismaService.playlist.findMany({
                 where: {
                     is_visible: true,
+                    deleted: false,
                 },
                 skip,
                 take,
@@ -30,10 +31,10 @@ export class PlaylistsService {
                     platform: true,
                 },
                 orderBy: { created_at: 'desc' },
-            }),
-            this.prismaService.playlist.count({
+            }),            this.prismaService.playlist.count({
                 where: {
                     is_visible: true,
+                    deleted: false,
                 },
             }),
         ]);
@@ -42,7 +43,10 @@ export class PlaylistsService {
     }    async findByCreator(creatorId: string, skip = 0, take = 10) {
         const [data, total] = await Promise.all([
             this.prismaService.playlist.findMany({
-                where: { creator_id: creatorId },
+                where: { 
+                    creator_id: creatorId,
+                    deleted: false,
+                },
                 skip,
                 take,
                 include: {
@@ -56,17 +60,19 @@ export class PlaylistsService {
                     platform: true,
                 },
                 orderBy: { created_at: 'desc' },
-            }),
-            this.prismaService.playlist.count({
-                where: { creator_id: creatorId },
+            }),            this.prismaService.playlist.count({
+                where: { 
+                    creator_id: creatorId,
+                    deleted: false,
+                },
             }),
         ]);        return { data, total, skip, take };
     }    async findByPlatform(platformId: number, skip = 0, take = 50) {
         const [data, total] = await Promise.all([
-            this.prismaService.playlist.findMany({
-                where: {
+            this.prismaService.playlist.findMany({                where: {
                     platform_id: platformId,
                     is_visible: true,
+                    deleted: false,
                 },
                 skip,
                 take,
@@ -81,11 +87,11 @@ export class PlaylistsService {
                     platform: true,
                 },
                 orderBy: { created_at: 'desc' },
-            }),
-            this.prismaService.playlist.count({
+            }),            this.prismaService.playlist.count({
                 where: {
                     platform_id: platformId,
                     is_visible: true,
+                    deleted: false,
                 },
             }),
         ]);
@@ -217,23 +223,24 @@ export class PlaylistsService {
                 platform: true,
             },
         });
-    }
-
-    async remove(id: string) {
+    }    async remove(id: string) {
         await this.findOne(id);
 
-        const submissionsCount = await this.prismaService.submission.count({
+        // Soft delete: set deleted to true instead of actually deleting the record
+        return this.prismaService.playlist.update({
             where: { playlist_id: id },
-        });
-
-        if (submissionsCount > 0) {
-            throw new ConflictException(
-                `Cannot delete playlist with ID ${id} as it has ${submissionsCount} submissions`
-            );
-        }
-
-        return this.prismaService.playlist.delete({
-            where: { playlist_id: id },
+            data: {
+                deleted: true,
+                updated_at: new Date(),
+            },
+            include: {
+                creator: {
+                    select: {
+                        username: true,
+                    },
+                },
+                platform: true,
+            },
         });
     }
 

@@ -5,11 +5,11 @@ import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class SongsService {
-    constructor(private readonly prismaService: PrismaService) { }
-
-    async findAll(skip = 0, take = 10) {
+    constructor(private readonly prismaService: PrismaService) { }    async findAll(skip = 0, take = 10) {
         const [data, total] = await Promise.all([
-            this.prismaService.song.findMany({
+            this.prismaService.song.findMany({                where: {
+                    deleted: false,
+                },
                 skip,
                 take,
                 include: {
@@ -22,24 +22,31 @@ export class SongsService {
                     platform: true,
                 },
             }),
-            this.prismaService.song.count(),
+            this.prismaService.song.count({
+                where: {
+                    deleted: false,
+                },
+            }),
         ]);
 
         return { data, total, skip, take };
-    }
-
-    async findByArtist(artistId: string, skip = 0, take = 10) {
+    }    async findByArtist(artistId: string, skip = 0, take = 10) {
         const [data, total] = await Promise.all([
             this.prismaService.song.findMany({
-                where: { artist_id: artistId },
+                where: { 
+                    artist_id: artistId,
+                    deleted: false,
+                },
                 skip,
                 take,
                 include: {
                     platform: true,
                 },
-            }),
-            this.prismaService.song.count({
-                where: { artist_id: artistId },
+            }),            this.prismaService.song.count({
+                where: { 
+                    artist_id: artistId,
+                    deleted: false,
+                },
             }),
         ]);
 
@@ -152,23 +159,24 @@ export class SongsService {
                 platform: true,
             },
         });
-    }
-
-    async remove(id: string) {
+    }    async remove(id: string) {
         await this.findOne(id);
 
-        const submissionsCount = await this.prismaService.submission.count({
+        // Soft delete: set deleted to true instead of actually deleting the record
+        return this.prismaService.song.update({
             where: { song_id: id },
-        });
-
-        if (submissionsCount > 0) {
-            throw new ConflictException(
-                `Cannot delete song with ID ${id} as it has ${submissionsCount} submissions`
-            );
-        }
-
-        return this.prismaService.song.delete({
-            where: { song_id: id },
+            data: {
+                deleted: true,
+                updated_at: new Date(),
+            },
+            include: {
+                artist: {
+                    select: {
+                        username: true,
+                    },
+                },
+                platform: true,
+            },
         });
     }
 }

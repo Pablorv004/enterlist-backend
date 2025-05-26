@@ -77,11 +77,13 @@ export class UpdatePlaylistDto {
 
     @IsDecimal()
     @IsOptional()
-    submission_fee?: number;
-
-    @IsString()
+    submission_fee?: number;    @IsString()
     @IsOptional()
     genre?: string;
+
+    @IsBoolean()
+    @IsOptional()
+    deleted?: boolean;
 }
 
 export class ImportPlaylistsDto {

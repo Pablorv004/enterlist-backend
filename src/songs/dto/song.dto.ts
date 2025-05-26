@@ -78,4 +78,8 @@ export class UpdateSongDto {
     @IsBoolean()
     @IsOptional()
     is_visible?: boolean;
+
+    @IsBoolean()
+    @IsOptional()
+    deleted?: boolean;
 }
