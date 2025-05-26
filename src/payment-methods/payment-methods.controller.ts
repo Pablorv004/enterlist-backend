@@ -13,12 +13,13 @@ import { PaymentMethodsService } from './payment-methods.service';
 import { CreatePaymentMethodDto, UpdatePaymentMethodDto } from './dto/payment-method.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { RoleRequiredGuard } from '../auth/guards/role-required.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { user_role } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 
 @Controller('api/payment-methods')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RoleRequiredGuard)
 export class PaymentMethodsController {
     private readonly logger = new Logger(PaymentMethodsController.name);
     private clientId: string;

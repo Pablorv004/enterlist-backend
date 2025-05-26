@@ -2,6 +2,7 @@ import { Controller, Get, Query, Req, Res, UseGuards, ParseIntPipe, DefaultValue
 import { Response } from 'express';
 import { YoutubeAuthService } from './youtube-auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RoleRequiredGuard } from '../auth/guards/role-required.guard';
 import { ConfigService } from '@nestjs/config';
 
 @Controller('api/auth/youtube')
@@ -42,8 +43,8 @@ export class YoutubeAuthController {
         }        try {
             const result = await this.youtubeAuthService.handleCallback(code, state);
             
-            // Check if this is a new user that needs role selection
-            if (result.isNewUser) {
+            // Check if this is a new user or existing user that needs role selection
+            if (result.isNewUser || result.needsRoleSelection) {
                 // Set the JWT token as a cookie for the frontend to access
                 res.cookie('enterlist_token', result.access_token, {
                     httpOnly: false, // Allow frontend to access this cookie
@@ -63,35 +64,29 @@ export class YoutubeAuthController {
                 return res.redirect(`${frontendUrl}/role-selection?provider=youtube&status=success`);
             }
             
-            // If not a new user or role already set, go to dashboard
+            // If existing user with role, go to dashboard
             return res.redirect(`${frontendUrl}/dashboard?status=success&provider=youtube`);
         } catch (err) {
             return res.redirect(`${frontendUrl}/dashboard?error=${encodeURIComponent(err.message)}`);
         }
-    }
-
-    @Get('playlists')
-    @UseGuards(JwtAuthGuard)
+    }    @Get('playlists')
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     async getPlaylists(
         @Req() req,
         @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
         @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
     ) {
         return this.youtubeAuthService.getUserPlaylists(req.user.user_id, limit, offset);
-    }
-
-    @Get('channels')
-    @UseGuards(JwtAuthGuard)
+    }    @Get('channels')
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     async getChannels(
         @Req() req,
         @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
         @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
     ) {
         return this.youtubeAuthService.getUserChannels(req.user.user_id, limit, offset);
-    }
-
-    @Get('videos')
-    @UseGuards(JwtAuthGuard)
+    }    @Get('videos')
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     async getUserVideos(
         @Req() req,
         @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
@@ -99,29 +94,23 @@ export class YoutubeAuthController {
         @Query('musicOnly', new DefaultValuePipe(false)) musicOnly: boolean,
     ) {
         return this.youtubeAuthService.getUserVideos(req.user.user_id, limit, offset, musicOnly);
-    }
-
-    @Get('songs')
-    @UseGuards(JwtAuthGuard)
+    }    @Get('songs')
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     async getUserSongs(
         @Req() req,
         @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
         @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
     ) {
         return this.youtubeAuthService.getUserSongs(req.user.user_id, limit, offset);
-    }
-
-    @Post('import/playlists')
-    @UseGuards(JwtAuthGuard)
+    }    @Post('import/playlists')
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     async importPlaylists(
         @Req() req,
         @Body() body: { playlistIds: string[] }
     ) {
         return this.youtubeAuthService.importPlaylistsToDatabase(req.user.user_id, body.playlistIds);
-    }
-
-    @Post('import/videos')
-    @UseGuards(JwtAuthGuard)
+    }    @Post('import/videos')
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     async importVideos(
         @Req() req,
         @Body() body: { videoIds: string[] }

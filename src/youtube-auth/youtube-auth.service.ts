@@ -111,9 +111,7 @@ export class YoutubeAuthService {
 
         // Calculate token expiration date
         const tokenExpiresAt = new Date();
-        tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);
-
-        // If this is a new user registration (from register-or-login endpoint)
+        tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);        // If this is a new user registration (from register-or-login endpoint)
         if (isNewUser) {
             // Check if a user with this YouTube ID already exists
             const existingAccount = await this.prismaService.linkedAccount.findFirst({
@@ -127,9 +125,17 @@ export class YoutubeAuthService {
             });
 
             if (existingAccount) {
-                // User already exists, just return their account
-                userId = existingAccount.user_id;
-                return this.authService.generateToken(existingAccount.user);
+                // User already exists with this OAuth account, log them in
+                const tokenResult = this.authService.generateToken(existingAccount.user);
+                
+                // Check if user has a role - if not, they need role selection
+                const needsRoleSelection = !existingAccount.user.role;
+                
+                return {
+                    ...tokenResult,
+                    isNewUser: false,
+                    needsRoleSelection
+                };
             }
 
             // Register a new user with YouTube info
@@ -144,7 +150,7 @@ export class YoutubeAuthService {
                 email,
                 username,
                 password,
-                role: user_role.artist, // Default role for YouTube users
+                role: undefined, // No role set - user will be redirected to role selection
                 oauth_provider: 'youtube',
                 oauth_id: youtubeId,
             });
@@ -187,9 +193,7 @@ export class YoutubeAuthService {
         } else {
             // Create new link
             await this.linkedAccountsService.create(linkedAccountData);
-        }
-
-        // For new users, return auth token
+        }        // For new users, return auth token
         if (isNewUser) {
             const user = await this.prismaService.user.findUnique({
                 where: { user_id: userId },
@@ -199,10 +203,15 @@ export class YoutubeAuthService {
                 throw new NotFoundException('User not found');
             }
             
-            return this.authService.generateToken(user);
+            const tokenResult = this.authService.generateToken(user);
+            return {
+                ...tokenResult,
+                isNewUser: true,
+                needsRoleSelection: !user.role
+            };
         }
 
-        return { success: true };
+        return { success: true, isNewUser: false, needsRoleSelection: false };
     }
 
     private async exchangeCodeForTokens(code: string): Promise<any> {

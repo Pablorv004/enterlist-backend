@@ -16,6 +16,7 @@ import { PlaylistsService } from './playlists.service';
 import { CreatePlaylistDto, UpdatePlaylistDto, ImportPlaylistsDto } from './dto/playlist.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { RoleRequiredGuard } from '../auth/guards/role-required.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { user_role } from '@prisma/client';
 
@@ -48,26 +49,26 @@ export class PlaylistsController {
         return this.playlistsService.getPlaylistTracks(id);
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     @Post()
     create(@Body() createPlaylistDto: CreatePlaylistDto) {
         return this.playlistsService.create(createPlaylistDto);
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     @Put(':id')
     update(
         @Param('id') id: string,
         @Body() updatePlaylistDto: UpdatePlaylistDto,
     ) {
         return this.playlistsService.update(id, updatePlaylistDto);
-    }    @UseGuards(JwtAuthGuard)
+    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     @Delete(':id')
     remove(@Param('id') id: string) {
         return this.playlistsService.remove(id);
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     @Put(':id/submission-fee')
     updateSubmissionFee(
         @Param('id') id: string,
@@ -76,7 +77,7 @@ export class PlaylistsController {
         return this.playlistsService.update(id, { submission_fee: body.submission_fee });
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     @Put(':id/genre')
     updateGenre(
         @Param('id') id: string,
@@ -85,7 +86,7 @@ export class PlaylistsController {
         return this.playlistsService.update(id, { genre: body.genre });
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     @Post('import')
     importPlaylists(@Req() req, @Body() importPlaylistsDto: ImportPlaylistsDto) {
         return this.playlistsService.importPlaylists(req.user.user_id, importPlaylistsDto.platformId);

@@ -33,20 +33,23 @@ export class AuthService {
             );
         }
 
-        const passwordHash = await this.hashPassword(password);
+        const passwordHash = await this.hashPassword(password);        const userData: any = {
+            user_id: uuidv4(),
+            email,
+            username,
+            password_hash: passwordHash,
+            oauth_provider: registerDto.oauth_provider,
+            oauth_id: registerDto.oauth_id,
+            created_at: new Date(),
+            updated_at: new Date(),
+        };
+
+        if (role) {
+            userData.role = role;
+        }
 
         const user = await this.prismaService.user.create({
-            data: {
-                user_id: uuidv4(),
-                email,
-                username,
-                password_hash: passwordHash,
-                role,
-                oauth_provider: registerDto.oauth_provider,
-                oauth_id: registerDto.oauth_id,
-                created_at: new Date(),
-                updated_at: new Date(),
-            },
+            data: userData,
         });
 
         return this.generateToken(user);
@@ -90,7 +93,7 @@ export class AuthService {
         const payload = {
             sub: user.user_id,
             email: user.email,
-            role: user.role,
+            role: user.role || null,
         };
 
         return {

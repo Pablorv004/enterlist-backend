@@ -105,9 +105,7 @@ export class SpotifyAuthService {
 
         // Calculate token expiration date
         const tokenExpiresAt = new Date();
-        tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);
-
-        // If this is a new user registration (from register-or-login endpoint)
+        tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);        // If this is a new user registration (from register-or-login endpoint)
         if (isNewUser) {
             // Check if a user with this Spotify ID already exists
             const existingAccount = await this.prismaService.linkedAccount.findFirst({
@@ -121,9 +119,17 @@ export class SpotifyAuthService {
             });
 
             if (existingAccount) {
-                // User already exists, just return their account
-                userId = existingAccount.user_id;
-                return this.authService.generateToken(existingAccount.user);
+                // User already exists with this OAuth account, log them in
+                const tokenResult = this.authService.generateToken(existingAccount.user);
+                
+                // Check if user has a role - if not, they need role selection
+                const needsRoleSelection = !existingAccount.user.role;
+                
+                return {
+                    ...tokenResult,
+                    isNewUser: false,
+                    needsRoleSelection
+                };
             }
 
             // Register a new user with Spotify info
@@ -138,7 +144,7 @@ export class SpotifyAuthService {
                 email,
                 username,
                 password,
-                role: user_role.artist, // Default role for Spotify users
+                role: undefined, // No role set initially - user will select role
                 oauth_provider: 'spotify',
                 oauth_id: profile.id,
             });
@@ -194,11 +200,12 @@ export class SpotifyAuthService {
             const tokenResult = this.authService.generateToken(user);
             return {
                 ...tokenResult,
-                isNewUser: true
+                isNewUser: true,
+                needsRoleSelection: !user.role
             };
         }
 
-        return { success: true, isNewUser: false };
+        return { success: true, isNewUser: false, needsRoleSelection: false };
     }
 
     private async exchangeCodeForTokens(code: string): Promise<any> {

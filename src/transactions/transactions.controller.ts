@@ -14,6 +14,7 @@ import { TransactionsService } from './transactions.service';
 import { CreateTransactionDto, UpdateTransactionDto } from './dto/transaction.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { RoleRequiredGuard } from '../auth/guards/role-required.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { user_role, transaction_status } from '@prisma/client';
 
@@ -31,8 +32,7 @@ export class TransactionsController {
         @Query('status') status?: transaction_status,
     ) {
         return this.transactionsService.findAll(skip, take, status);
-    }
-
+    }    @UseGuards(RoleRequiredGuard)
     @Get('artist/:artistId')
     findByArtist(
         @Param('artistId') artistId: string,
@@ -40,14 +40,11 @@ export class TransactionsController {
         @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
     ) {
         return this.transactionsService.findByArtist(artistId, skip, take);
-    }
-
+    }    @UseGuards(RoleRequiredGuard)
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.transactionsService.findOne(id);
-    }
-
-    @UseGuards(RolesGuard)
+    }    @UseGuards(RolesGuard, RoleRequiredGuard)
     @Roles(user_role.artist, user_role.admin)
     @Post()
     create(@Body() createTransactionDto: CreateTransactionDto) {

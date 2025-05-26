@@ -15,6 +15,7 @@ import { SongsService } from './songs.service';
 import { CreateSongDto, UpdateSongDto } from './dto/song.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { RoleRequiredGuard } from '../auth/guards/role-required.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { user_role } from '@prisma/client';
 
@@ -44,13 +45,13 @@ export class SongsController {
         return this.songsService.findOne(id);
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     @Post()
     create(@Body() createSongDto: CreateSongDto) {
         return this.songsService.create(createSongDto);
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     @Put(':id')
     update(
         @Param('id') id: string,
@@ -59,7 +60,7 @@ export class SongsController {
         return this.songsService.update(id, updateSongDto);
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     @Delete(':id')
     remove(@Param('id') id: string) {
         return this.songsService.remove(id);

@@ -16,6 +16,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto, UpdateUserDto, UpdateRoleDto } from './dto/user.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { RoleRequiredGuard } from '../auth/guards/role-required.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { user_role } from '@prisma/client';
 
@@ -31,7 +32,7 @@ export class UsersController {
         return this.usersService.findAll(skip, take);
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.usersService.findOne(id);
@@ -42,13 +43,13 @@ export class UsersController {
         return this.usersService.create(createUserDto);
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     @Put(':id')
     update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
         return this.usersService.update(id, updateUserDto);
     }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     @Delete(':id')
     remove(@Param('id') id: string) {
         return this.usersService.remove(id);
