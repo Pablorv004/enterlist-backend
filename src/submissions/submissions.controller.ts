@@ -101,8 +101,7 @@ export class SubmissionsController {
         return this.submissionsService.getEarningsStatsByCreator(creatorId);
     }
 
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
-    @Ownership({ model: 'submission', userField: 'artist_id' })
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.submissionsService.findOne(id);
