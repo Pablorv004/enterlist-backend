@@ -110,7 +110,7 @@ export class SpotifyAuthService {
             // Check if a user with this Spotify ID already exists
             const existingAccount = await this.prismaService.user.findFirst({
                 where: {
-                    oauth_provider: spotifyPlatform.name,
+                    oauth_provider: spotifyPlatform.name.toLowerCase(),
                     oauth_id: profile.id,
                 }
             });

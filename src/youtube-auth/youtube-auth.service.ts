@@ -116,7 +116,7 @@ export class YoutubeAuthService {
             // Check if a user with this YouTube ID already exists
             const existingAccount = await this.prismaService.user.findFirst({
                 where: {
-                    oauth_provider: youtubePlatform.name,
+                    oauth_provider: youtubePlatform.name.toLowerCase(),
                     oauth_id: youtubeId,
                 }
             });
