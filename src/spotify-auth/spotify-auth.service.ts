@@ -111,9 +111,7 @@ export class SpotifyAuthService {
                 oauth_provider: 'spotify',
                 oauth_id: profile.id,
             }
-        });
-
-        if (existingOAuthUser) {
+        });        if (existingOAuthUser) {
             // User already exists with this OAuth account, log them in
             userId = existingOAuthUser.user_id;
             
@@ -156,7 +154,8 @@ export class SpotifyAuthService {
             return {
                 ...tokenResult,
                 isNewUser: false,
-                needsRoleSelection
+                needsRoleSelection,
+                user: existingOAuthUser
             };
         }
         

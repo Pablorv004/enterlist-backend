@@ -153,8 +153,7 @@ export class YoutubeAuthService {
                 };
                 await this.linkedAccountsService.create(linkedAccountData);
             }
-            
-            const tokenResult = this.authService.generateToken(existingOAuthUser);
+              const tokenResult = this.authService.generateToken(existingOAuthUser);
             
             // Check if user has a role - if not, they need role selection
             const needsRoleSelection = !existingOAuthUser.role;
@@ -162,7 +161,8 @@ export class YoutubeAuthService {
             return {
                 ...tokenResult,
                 isNewUser: false,
-                needsRoleSelection
+                needsRoleSelection,
+                user: existingOAuthUser
             };
         }
         

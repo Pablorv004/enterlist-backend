@@ -64,6 +64,21 @@ export class YoutubeAuthController {
                 return res.redirect(`${frontendUrl}/role-selection?provider=youtube&status=success`);
             }
             
+            // If existing user with role, set authentication cookies before redirecting
+            res.cookie('enterlist_token', result.access_token, {
+                httpOnly: false,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+            });
+            
+            res.cookie('enterlist_user', JSON.stringify(result.user), {
+                httpOnly: false,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+            });
+            
             // If existing user with role, go to dashboard
             return res.redirect(`${frontendUrl}/dashboard?status=success&provider=youtube`);
         } catch (err) {
