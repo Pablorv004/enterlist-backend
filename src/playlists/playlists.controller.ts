@@ -15,7 +15,7 @@ import {
     BadRequestException
 } from '@nestjs/common';
 import { PlaylistsService } from './playlists.service';
-import { CreatePlaylistDto, UpdatePlaylistDto, ImportPlaylistsDto } from './dto/playlist.dto';
+import { CreatePlaylistDto, UpdatePlaylistDto } from './dto/playlist.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { RoleRequiredGuard } from '../auth/guards/role-required.guard';
@@ -93,13 +93,7 @@ export class PlaylistsController {
         @Body() body: { genre: string }
     ) {
         return this.playlistsService.update(id, { genre: body.genre });
-    }
-
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
-    @Post('import')
-    importPlaylists(@Req() req, @Body() importPlaylistsDto: ImportPlaylistsDto) {
-        return this.playlistsService.importPlaylists(req.user.user_id, importPlaylistsDto.platformId);
-    }    @Get('platform/:platformId')
+    }@Get('platform/:platformId')
     findByPlatform(
         @Param('platformId', ParseIntPipe) platformId: number,
         @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,

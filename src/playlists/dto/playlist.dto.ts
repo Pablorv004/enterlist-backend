@@ -86,8 +86,4 @@ export class UpdatePlaylistDto {
     deleted?: boolean;
 }
 
-export class ImportPlaylistsDto {
-    @IsInt()
-    @IsNotEmpty()
-    platformId: number;
-}
+
