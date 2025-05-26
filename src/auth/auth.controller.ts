@@ -18,11 +18,17 @@ export class AuthController {
     @Post('login')
     async login(@Body() loginDto: LoginDto) {
         return this.authService.login(loginDto);
-    }
-
-    @UseGuards(JwtAuthGuard)
+    }    @UseGuards(JwtAuthGuard)
     @Get('profile')
     getProfile(@Req() req: Request) {
-        return req.user;
+        // Ensure we're returning a complete user object with all required fields
+        const user = req.user;
+        
+        // Make sure user_id is properly set and valid
+        if (!user ) {
+            throw new Error('Invalid user data in JWT token');
+        }
+        
+        return user;
     }
 }

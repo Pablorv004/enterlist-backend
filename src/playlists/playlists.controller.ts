@@ -30,16 +30,18 @@ export class PlaylistsController {
         @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
     ) {
         return this.playlistsService.findAll(skip, take);
-    }
-
-    @Get('creator/:creatorId')
+    }    @Get('creator/:creatorId')
     findByCreator(
         @Param('creatorId') creatorId: string,
         @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
         @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
     ) {
+        // Validate the creatorId before proceeding
+        if (!creatorId || creatorId === 'undefined') {
+            return { data: [], total: 0, skip, take };
+        }
         return this.playlistsService.findByCreator(creatorId, skip, take);
-    }    @Get(':id')
+    }@Get(':id')
     findOne(@Param('id') id: string) {
         return this.playlistsService.findOne(id);
     }

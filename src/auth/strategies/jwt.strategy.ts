@@ -20,9 +20,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
                 ignoreExpiration: false,
                 secretOrKey: secretKey,
             });
+        }    async validate(payload: { sub: string; email: string }) {
+        // Validate that sub is a properly formatted UUID
+        if (!payload.sub || typeof payload.sub !== 'string' || payload.sub === 'undefined') {
+            throw new UnauthorizedException('Invalid user ID in token');
         }
 
-    async validate(payload: { sub: string; email: string }) {
         const user = await this.prismaService.user.findUnique({
             where: { user_id: payload.sub },
         });
