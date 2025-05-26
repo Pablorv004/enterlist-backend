@@ -116,6 +116,14 @@ export class SubmissionsController {
         @Body() updateSubmissionDto: UpdateSubmissionDto,
     ) {
         return this.submissionsService.update(id, updateSubmissionDto);
+    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard, RolesGuard)
+    @Roles(user_role.playlist_maker, user_role.admin)
+    @Put(':id/status')
+    updateStatus(
+        @Param('id') id: string,
+        @Body() updateSubmissionDto: UpdateSubmissionDto,
+    ) {
+        return this.submissionsService.update(id, updateSubmissionDto);
     }
 
     @UseGuards(JwtAuthGuard, RoleRequiredGuard)
