@@ -23,9 +23,6 @@ export class RegisterDto {
     @IsString()
     @MinLength(8)
     password: string;    
-      @IsEnum(user_role)
-    @IsOptional()
-    role?: user_role;
 
     @IsString()
     @IsOptional()

@@ -167,13 +167,10 @@ export class SpotifyAuthService {
 
             // Generate a random password - user won't need to know it
             // as they'll log in via Spotify OAuth
-            const password = crypto.randomBytes(16).toString('hex');
-
-            const registerResult = await this.authService.register({
+            const password = crypto.randomBytes(16).toString('hex');            const registerResult = await this.authService.register({
                 email,
                 username,
                 password,
-                role: undefined, // No role set initially - user will select role
                 oauth_provider: 'spotify',
                 oauth_id: profile.id,
             });

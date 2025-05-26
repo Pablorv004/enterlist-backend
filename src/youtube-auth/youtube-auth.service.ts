@@ -175,12 +175,10 @@ export class YoutubeAuthService {
             // Generate a random password - user won't need to know it
             // as they'll log in via YouTube OAuth
             const password = crypto.randomBytes(16).toString('hex');
-            
-            const registerResult = await this.authService.register({
+              const registerResult = await this.authService.register({
                 email,
                 username,
                 password,
-                role: undefined, // No role set - user will be redirected to role selection
                 oauth_provider: 'youtube',
                 oauth_id: youtubeId,
             });

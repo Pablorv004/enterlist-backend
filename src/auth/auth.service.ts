@@ -12,7 +12,7 @@ export class AuthService {
         private readonly prismaService: PrismaService,
         private readonly jwtService: JwtService,
     ) { }    async register(registerDto: RegisterDto) {
-        const { email, username, password, role } = registerDto;
+        const { email, username, password } = registerDto;
 
         // For OAuth users, check if they already exist first by oauth_provider and oauth_id
         if (registerDto.oauth_provider && registerDto.oauth_id) {
@@ -47,9 +47,7 @@ export class AuthService {
             );
         }
 
-        const passwordHash = await this.hashPassword(password);
-        
-        const userData: any = {
+        const passwordHash = await this.hashPassword(password);        const userData: any = {
             user_id: uuidv4(),
             email,
             username,
@@ -58,11 +56,8 @@ export class AuthService {
             oauth_id: registerDto.oauth_id,
             created_at: new Date(),
             updated_at: new Date(),
+            // No role assigned by default - users will select role after registration
         };
-
-        if (role) {
-            userData.role = role;
-        }
 
         const user = await this.prismaService.user.create({
             data: userData,
