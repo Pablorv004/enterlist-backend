@@ -69,6 +69,8 @@ export class SubmissionsService {
                         select: {
                             title: true,
                             artist_name_on_platform: true,
+                            url: true,
+                            cover_image_url: true,
                         },
                     },
                 },
