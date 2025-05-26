@@ -114,22 +114,19 @@ export class YoutubeAuthService {
         tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);        // If this is a new user registration (from register-or-login endpoint)
         if (isNewUser) {
             // Check if a user with this YouTube ID already exists
-            const existingAccount = await this.prismaService.linkedAccount.findFirst({
+            const existingAccount = await this.prismaService.user.findFirst({
                 where: {
-                    platform_id: youtubePlatform.platform_id,
-                    external_user_id: youtubeId,
-                },
-                include: {
-                    user: true,
-                },
+                    oauth_provider: youtubePlatform.name,
+                    oauth_id: youtubeId,
+                }
             });
 
             if (existingAccount) {
                 // User already exists with this OAuth account, log them in
-                const tokenResult = this.authService.generateToken(existingAccount.user);
+                const tokenResult = this.authService.generateToken(existingAccount);
                 
                 // Check if user has a role - if not, they need role selection
-                const needsRoleSelection = !existingAccount.user.role;
+                const needsRoleSelection = !existingAccount.role;
                 
                 return {
                     ...tokenResult,
