@@ -29,62 +29,58 @@ export class YoutubeAuthController {
         // This endpoint doesn't require authentication as it's for new users
         const authUrl = await this.youtubeAuthService.getAuthorizationUrl();
         return res.redirect(authUrl);
-    }@Get('callback')
+    }    @Get('callback')
     async callback(
         @Query('code') code: string,
         @Query('state') state: string,
         @Query('error') error: string,
+        @Query('mobile') mobile: string,
+        @Req() req,
         @Res() res: Response,
     ) {
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+        const isMobile = mobile === 'true' || req.headers['user-agent']?.includes('Capacitor');
         
         if (error) {
-            return res.redirect(`${frontendUrl}/dashboard?error=${error}`);
-        }        try {
+            if (isMobile) {
+                return res.redirect(`enterlist://oauth/error?error=${encodeURIComponent(error)}`);
+            }
+            return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(error)}`);
+        }
+
+        try {
             const result = await this.youtubeAuthService.handleCallback(code, state);
             
-            // Check if this is a new user or existing user that needs role selection
-            if (result.isNewUser || result.needsRoleSelection) {
-                // Set the JWT token as a cookie for the frontend to access
-                res.cookie('enterlist_token', result.access_token, {
-                    httpOnly: false, // Allow frontend to access this cookie
-                    secure: process.env.NODE_ENV === 'production',
-                    sameSite: 'lax',
-                    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-                });
-                
-                // Also set user data as a cookie
-                res.cookie('enterlist_user', JSON.stringify(result.user), {
-                    httpOnly: false,
-                    secure: process.env.NODE_ENV === 'production',
-                    sameSite: 'lax',
-                    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-                });
-                
-                return res.redirect(`${frontendUrl}/role-selection?provider=youtube&status=success`);
+            // Create common parameters for both mobile and web
+            const params = new URLSearchParams({
+                access_token: result.access_token,
+                user: JSON.stringify(result.user),
+                status: 'success',
+                provider: 'youtube',
+                isNewUser: result.isNewUser?.toString() || 'false',
+                needsRoleSelection: result.needsRoleSelection?.toString() || 'false'
+            });
+            
+            if (isMobile) {
+                // For mobile, redirect with tokens in URL parameters
+                return res.redirect(`enterlist://oauth/callback?${params.toString()}`);
             }
             
-            // If existing user with role, set authentication cookies before redirecting
-            res.cookie('enterlist_token', result.access_token, {
-                httpOnly: false,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-            });
-            
-            res.cookie('enterlist_user', JSON.stringify(result.user), {
-                httpOnly: false,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-            });
+            // Web flow - use query parameters instead of cookies
+            // Check if this is a new user or existing user that needs role selection
+            if (result.isNewUser || result.needsRoleSelection) {
+                return res.redirect(`${frontendUrl}/role-selection?${params.toString()}`);
+            }
             
             // If existing user with role, go to dashboard
-            return res.redirect(`${frontendUrl}/dashboard?status=success&provider=youtube`);
+            return res.redirect(`${frontendUrl}/dashboard?${params.toString()}`);
         } catch (err) {
-            return res.redirect(`${frontendUrl}/dashboard?error=${encodeURIComponent(err.message)}`);
+            if (isMobile) {
+                return res.redirect(`enterlist://oauth/error?error=${encodeURIComponent(err.message)}`);
+            }
+            return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(err.message)}`);
         }
-    }    @Get('playlists')
+    }@Get('playlists')
     @UseGuards(JwtAuthGuard, RoleRequiredGuard)
     async getPlaylists(
         @Req() req,
