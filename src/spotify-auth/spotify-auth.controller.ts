@@ -69,7 +69,7 @@ export class SpotifyAuthController {
             // Web flow - use query parameters instead of cookies
             // Check if this is a new user or existing user that needs role selection
             if (result.isNewUser || result.needsRoleSelection) {
-                return res.redirect(`${frontendUrl}/role-selection`);
+                return res.redirect(`${frontendUrl}/role-selection?${params.toString()}`);
             }
             
             // If existing user with role, go to dashboard
