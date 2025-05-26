@@ -171,7 +171,6 @@ model AdminAction {
 }
 
 enum payment_method_type {
-  card
   paypal
 }
 

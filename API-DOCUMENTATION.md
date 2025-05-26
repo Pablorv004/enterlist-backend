@@ -1412,7 +1412,7 @@ This document provides comprehensive documentation for all endpoints in the Ente
     {
       "payment_method_id": "uuid",
       "artist_id": "uuid",
-      "type": "card | paypal",
+      "type": "paypal",
       "external_id": "string",
       "display_name": "string",
       "is_default": boolean,
@@ -1449,7 +1449,7 @@ This document provides comprehensive documentation for all endpoints in the Ente
     {
       "payment_method_id": "uuid",
       "artist_id": "uuid",
-      "type": "card | paypal",
+      "type": "paypal",
       "external_id": "string",
       "display_name": "string",
       "is_default": boolean,
@@ -1480,7 +1480,7 @@ This document provides comprehensive documentation for all endpoints in the Ente
 {
   "payment_method_id": "uuid",
   "artist_id": "uuid",
-  "type": "card | paypal",
+  "type": "paypal",
   "external_id": "string",
   "display_name": "string",
   "is_default": boolean,
@@ -1501,7 +1501,7 @@ This document provides comprehensive documentation for all endpoints in the Ente
 ```json
 {
   "artist_id": "uuid",
-  "type": "card | paypal",
+  "type": "paypal",
   "external_id": "string",
   "display_name": "string",
   "is_default": boolean
@@ -1515,7 +1515,7 @@ This document provides comprehensive documentation for all endpoints in the Ente
 {
   "payment_method_id": "uuid",
   "artist_id": "uuid",
-  "type": "card | paypal",
+  "type": "paypal",
   "external_id": "string",
   "display_name": "string",
   "is_default": boolean,
@@ -1550,7 +1550,7 @@ This document provides comprehensive documentation for all endpoints in the Ente
 {
   "payment_method_id": "uuid",
   "artist_id": "uuid",
-  "type": "card | paypal",
+  "type": "paypal",
   "external_id": "string",
   "display_name": "string",
   "is_default": boolean,

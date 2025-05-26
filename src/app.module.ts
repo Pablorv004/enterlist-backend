@@ -10,8 +10,6 @@ import { LinkedAccountsModule } from './linked-accounts/linked-accounts.module';
 import { PlaylistsModule } from './playlists/playlists.module';
 import { SongsModule } from './songs/songs.module';
 import { SubmissionsModule } from './submissions/submissions.module';
-import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
-import { TransactionsModule } from './transactions/transactions.module';
 import { AdminActionsModule } from './admin-actions/admin-actions.module';
 import { HealthModule } from './health/health.module';
 import { SpotifyAuthModule } from './spotify-auth/spotify-auth.module';
@@ -25,10 +23,8 @@ import { YoutubeAuthModule } from './youtube-auth/youtube-auth.module';
     UsersModule,
     PlatformsModule,
     LinkedAccountsModule,
-    PlaylistsModule,
-    SongsModule,    SubmissionsModule,
-    PaymentMethodsModule,
-    TransactionsModule,
+    PlaylistsModule,    SongsModule,
+    SubmissionsModule,
     AdminActionsModule,
     HealthModule,
     SpotifyAuthModule,
