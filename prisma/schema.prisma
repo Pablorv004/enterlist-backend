@@ -177,7 +177,6 @@ enum payment_method_type {
 
 enum submission_status {
   pending
-  under_review
   approved
   rejected
 }

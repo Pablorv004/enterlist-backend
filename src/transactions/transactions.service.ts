@@ -223,35 +223,10 @@ export class TransactionsService {
             },
         });
 
-        if (transaction.status === transaction_status.succeeded) {
-            await this.prismaService.submission.update({
-                where: { submission_id },
-                data: {
-                    status: submission_status.under_review,
-                },
-            });
-        }
-
         return transaction;
     }
 
     async update(id: string, updateTransactionDto: UpdateTransactionDto) {
-        const transaction = await this.findOne(id);
-
-        if (updateTransactionDto.status &&
-            updateTransactionDto.status !== transaction.status) {
-
-            if (updateTransactionDto.status === transaction_status.succeeded &&
-                transaction.submission.status === submission_status.pending) {
-
-                await this.prismaService.submission.update({
-                    where: { submission_id: transaction.submission.submission_id },
-                    data: {
-                        status: submission_status.under_review,
-                    },
-                });
-            }
-        }
 
         return this.prismaService.transaction.update({
             where: { transaction_id: id },

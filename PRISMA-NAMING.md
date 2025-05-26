@@ -39,7 +39,6 @@ The project uses the following enums:
 
 2. `submission_status` - Status of song submissions
    - `pending`
-   - `under_review`
    - `approved`
    - `rejected`
 

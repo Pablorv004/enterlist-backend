@@ -841,7 +841,7 @@ This document provides comprehensive documentation for all endpoints in the Ente
 **Query Parameters:**
 - `skip` (optional): Number of items to skip (default: 0)
 - `take` (optional): Number of items to take (default: 10)
-- `status` (optional): Filter by status (pending, under_review, approved, rejected)
+- `status` (optional): Filter by status (pending, approved, rejected)
 
 **Response:**
 - **Status Code:** 200 (OK)
@@ -854,7 +854,7 @@ This document provides comprehensive documentation for all endpoints in the Ente
       "artist_id": "uuid",
       "playlist_id": "uuid",
       "song_id": "uuid",
-      "status": "pending | under_review | approved | rejected",
+      "status": "pending | approved | rejected",
       "submission_message": "string",
       "review_feedback": "string",
       "submitted_at": "timestamp",
@@ -892,7 +892,7 @@ This document provides comprehensive documentation for all endpoints in the Ente
       "artist_id": "uuid",
       "playlist_id": "uuid",
       "song_id": "uuid",
-      "status": "pending | under_review | approved | rejected",
+      "status": "pending | approved | rejected",
       "submission_message": "string",
       "review_feedback": "string",
       "submitted_at": "timestamp",
@@ -930,7 +930,7 @@ This document provides comprehensive documentation for all endpoints in the Ente
       "artist_id": "uuid",
       "playlist_id": "uuid",
       "song_id": "uuid",
-      "status": "pending | under_review | approved | rejected",
+      "status": "pending  | approved | rejected",
       "submission_message": "string",
       "review_feedback": "string",
       "submitted_at": "timestamp",
@@ -962,7 +962,7 @@ This document provides comprehensive documentation for all endpoints in the Ente
   "artist_id": "uuid",
   "playlist_id": "uuid",
   "song_id": "uuid",
-  "status": "pending | under_review | approved | rejected",
+  "status": "pending | approved | rejected",
   "submission_message": "string",
   "review_feedback": "string",
   "submitted_at": "timestamp",
@@ -1026,7 +1026,7 @@ This document provides comprehensive documentation for all endpoints in the Ente
 **Request Body:**
 ```json
 {
-  "status": "pending | under_review | approved | rejected", // Optional
+  "status": "pending | approved | rejected", // Optional
   "review_feedback": "string", // Optional
   "reviewed_at": "date" // Optional
 }
@@ -1041,7 +1041,7 @@ This document provides comprehensive documentation for all endpoints in the Ente
   "artist_id": "uuid",
   "playlist_id": "uuid",
   "song_id": "uuid",
-  "status": "pending | under_review | approved | rejected",
+  "status": "pending | approved | rejected",
   "submission_message": "string",
   "review_feedback": "string",
   "submitted_at": "timestamp",

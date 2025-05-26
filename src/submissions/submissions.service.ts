@@ -360,7 +360,6 @@ export class SubmissionsService {
                 playlistStats[stat.playlist_id] = {
                     submissions: 0,
                     pending: 0,
-                    under_review: 0,
                     approved: 0,
                     rejected: 0,
                     earnings: 0
