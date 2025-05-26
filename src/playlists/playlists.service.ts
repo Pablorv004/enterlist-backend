@@ -15,7 +15,7 @@ export class PlaylistsService {
         const [data, total] = await Promise.all([
             this.prismaService.playlist.findMany({
                 where: {
-                    is_visible: true, // Only return visible playlists for public listing
+                    is_visible: true,
                 },
                 skip,
                 take,
@@ -101,20 +101,16 @@ export class PlaylistsService {
     }
 
     async getPlaylistTracks(id: string) {
-        // First, get the playlist to find its platform and external ID
         const playlist = await this.findOne(id);
 
-        // Get the platform name to determine which service to use
         const platformName = playlist.platform?.name?.toLowerCase();
 
         if (platformName === 'spotify') {
-            // Use Spotify service to get playlist tracks
             return this.spotifyAuthService.getPlaylistTracks(
                 playlist.platform_specific_id,
                 playlist.creator_id
             );
         } else if (platformName === 'youtube') {
-            // Use YouTube service to get playlist tracks
             return this.youtubeAuthService.getPlaylistTracks(
                 playlist.platform_specific_id,
                 playlist.creator_id
@@ -133,10 +129,6 @@ export class PlaylistsService {
 
         if (!creator) {
             throw new NotFoundException(`User with ID ${creator_id} not found`);
-        }
-
-        if (creator.role !== 'playlist_maker' && creator.role !== 'admin') {
-            throw new ConflictException(`User must be a playlist maker to create playlists`);
         }
 
         const platform = await this.prismaService.platform.findUnique({

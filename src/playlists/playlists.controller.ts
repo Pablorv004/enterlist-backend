@@ -10,7 +10,9 @@ import {
     Query,
     ParseIntPipe,
     DefaultValuePipe,
-    Req
+    Req,
+    NotFoundException,
+    BadRequestException
 } from '@nestjs/common';
 import { PlaylistsService } from './playlists.service';
 import { CreatePlaylistDto, UpdatePlaylistDto, ImportPlaylistsDto } from './dto/playlist.dto';
@@ -36,10 +38,6 @@ export class PlaylistsController {
         @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
         @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
     ) {
-        // Validate the creatorId before proceeding
-        if (!creatorId || creatorId === 'undefined') {
-            return { data: [], total: 0, skip, take };
-        }
         return this.playlistsService.findByCreator(creatorId, skip, take);
     }@Get(':id')
     findOne(@Param('id') id: string) {
@@ -52,6 +50,7 @@ export class PlaylistsController {
     }
 
     @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    @Roles(user_role.admin)
     @Post()
     create(@Body() createPlaylistDto: CreatePlaylistDto) {
         return this.playlistsService.create(createPlaylistDto);
