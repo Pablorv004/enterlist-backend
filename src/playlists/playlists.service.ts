@@ -11,38 +11,51 @@ export class PlaylistsService {
         private readonly prismaService: PrismaService,
         private readonly spotifyAuthService: SpotifyAuthService,
         private readonly youtubeAuthService: YoutubeAuthService,
-    ) { }
-
-    async findAll(skip = 0, take = 10) {
+    ) { }    async findAll(skip = 0, take = 10) {
         const [data, total] = await Promise.all([
             this.prismaService.playlist.findMany({
+                where: {
+                    is_visible: true, // Only return visible playlists for public listing
+                },
                 skip,
                 take,
                 include: {
                     creator: {
                         select: {
+                            user_id: true,
                             username: true,
                             email: true,
                         },
                     },
                     platform: true,
                 },
+                orderBy: { created_at: 'desc' },
             }),
-            this.prismaService.playlist.count(),
+            this.prismaService.playlist.count({
+                where: {
+                    is_visible: true,
+                },
+            }),
         ]);
 
         return { data, total, skip, take };
-    }
-
-    async findByCreator(creatorId: string, skip = 0, take = 10) {
+    }    async findByCreator(creatorId: string, skip = 0, take = 10) {
         const [data, total] = await Promise.all([
             this.prismaService.playlist.findMany({
                 where: { creator_id: creatorId },
                 skip,
                 take,
                 include: {
+                    creator: {
+                        select: {
+                            user_id: true,
+                            username: true,
+                            email: true,
+                        },
+                    },
                     platform: true,
                 },
+                orderBy: { created_at: 'desc' },
             }),
             this.prismaService.playlist.count({
                 where: { creator_id: creatorId },
@@ -50,7 +63,7 @@ export class PlaylistsService {
         ]);
 
         return { data, total, skip, take };
-    }    async findOne(id: string) {
+    }async findOne(id: string) {
         const playlist = await this.prismaService.playlist.findUnique({
             where: { playlist_id: id },
             include: {
