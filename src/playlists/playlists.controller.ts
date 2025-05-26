@@ -99,6 +99,13 @@ export class PlaylistsController {
     @Post('import')
     importPlaylists(@Req() req, @Body() importPlaylistsDto: ImportPlaylistsDto) {
         return this.playlistsService.importPlaylists(req.user.user_id, importPlaylistsDto.platformId);
+    }    @Get('platform/:platformId')
+    findByPlatform(
+        @Param('platformId', ParseIntPipe) platformId: number,
+        @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
+        @Query('take', new DefaultValuePipe(50), ParseIntPipe) take: number,
+    ) {
+        return this.playlistsService.findByPlatform(platformId, skip, take);
     }
 }
 

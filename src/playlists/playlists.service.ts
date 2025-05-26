@@ -60,10 +60,40 @@ export class PlaylistsService {
             this.prismaService.playlist.count({
                 where: { creator_id: creatorId },
             }),
+        ]);        return { data, total, skip, take };
+    }    async findByPlatform(platformId: number, skip = 0, take = 50) {
+        const [data, total] = await Promise.all([
+            this.prismaService.playlist.findMany({
+                where: {
+                    platform_id: platformId,
+                    is_visible: true,
+                },
+                skip,
+                take,
+                include: {
+                    creator: {
+                        select: {
+                            user_id: true,
+                            username: true,
+                            email: true,
+                        },
+                    },
+                    platform: true,
+                },
+                orderBy: { created_at: 'desc' },
+            }),
+            this.prismaService.playlist.count({
+                where: {
+                    platform_id: platformId,
+                    is_visible: true,
+                },
+            }),
         ]);
 
         return { data, total, skip, take };
-    }async findOne(id: string) {
+    }
+
+    async findOne(id: string) {
         const playlist = await this.prismaService.playlist.findUnique({
             where: { playlist_id: id },
             include: {
