@@ -19,7 +19,9 @@ import { CreatePlaylistDto, UpdatePlaylistDto, ImportPlaylistsDto } from './dto/
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { RoleRequiredGuard } from '../auth/guards/role-required.guard';
+import { OwnershipGuard } from '../auth/guards/ownership.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Ownership } from '../auth/decorators/ownership.decorator';
 import { user_role } from '@prisma/client';
 
 @Controller('api/playlists')
@@ -32,7 +34,9 @@ export class PlaylistsController {
         @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
     ) {
         return this.playlistsService.findAll(skip, take);
-    }    @Get('creator/:creatorId')
+    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'user', userField: 'user_id', paramName: 'creatorId' })
+    @Get('creator/:creatorId')
     findByCreator(
         @Param('creatorId') creatorId: string,
         @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
@@ -54,22 +58,25 @@ export class PlaylistsController {
     @Post()
     create(@Body() createPlaylistDto: CreatePlaylistDto) {
         return this.playlistsService.create(createPlaylistDto);
-    }
-
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'playlist', userField: 'creator_id' })
     @Put(':id')
     update(
         @Param('id') id: string,
         @Body() updatePlaylistDto: UpdatePlaylistDto,
     ) {
         return this.playlistsService.update(id, updatePlaylistDto);
-    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    }
+
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'playlist', userField: 'creator_id' })
     @Delete(':id')
     remove(@Param('id') id: string) {
         return this.playlistsService.remove(id);
     }
 
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'playlist', userField: 'creator_id' })
     @Put(':id/submission-fee')
     updateSubmissionFee(
         @Param('id') id: string,
@@ -78,7 +85,8 @@ export class PlaylistsController {
         return this.playlistsService.update(id, { submission_fee: body.submission_fee });
     }
 
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'playlist', userField: 'creator_id' })
     @Put(':id/genre')
     updateGenre(
         @Param('id') id: string,

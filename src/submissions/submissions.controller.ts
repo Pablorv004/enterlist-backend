@@ -16,7 +16,9 @@ import { CreateSubmissionDto, UpdateSubmissionDto } from './dto/submission.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { RoleRequiredGuard } from '../auth/guards/role-required.guard';
+import { OwnershipGuard } from '../auth/guards/ownership.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Ownership } from '../auth/decorators/ownership.decorator';
 import { user_role, submission_status } from '@prisma/client';
 
 @Controller('api/submissions')
@@ -31,7 +33,8 @@ export class SubmissionsController {
         @Query('status') status?: submission_status,
     ) {
         return this.submissionsService.findAll(skip, take, status);
-    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'user', userField: 'user_id', paramName: 'artistId' })
     @Get('artist/:artistId')
     findByArtist(
         @Param('artistId') artistId: string,
@@ -43,9 +46,8 @@ export class SubmissionsController {
             return { data: [], total: 0, skip, take };
         }
         return this.submissionsService.findByArtist(artistId, skip, take);
-    }
-
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'playlist', userField: 'creator_id', paramName: 'playlistId' })
     @Get('playlist/:playlistId')
     findByPlaylist(
         @Param('playlistId') playlistId: string,
@@ -54,7 +56,8 @@ export class SubmissionsController {
         @Query('status') status?: submission_status,
     ) {
         return this.submissionsService.findByPlaylist(playlistId, skip, take, status);
-    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'user', userField: 'user_id', paramName: 'creatorId' })
     @Get('creator/:creatorId')
     findByCreator(
         @Param('creatorId') creatorId: string,
@@ -68,7 +71,8 @@ export class SubmissionsController {
             return { data: [], total: 0, skip, take };
         }
         return this.submissionsService.findByCreator(creatorId, skip, take, status, playlistId);
-    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'user', userField: 'user_id', paramName: 'creatorId' })
     @Get('stats/creator/:creatorId')
     getSubmissionStatsByCreator(@Param('creatorId') creatorId: string) {
         // Validate the creatorId before proceeding
@@ -81,7 +85,8 @@ export class SubmissionsController {
             };
         }
         return this.submissionsService.getSubmissionStatsByCreator(creatorId);
-    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'user', userField: 'user_id', paramName: 'creatorId' })
     @Get('earnings/creator/:creatorId')
     getEarningsStatsByCreator(@Param('creatorId') creatorId: string) {
         // Validate the creatorId before proceeding
@@ -96,7 +101,8 @@ export class SubmissionsController {
         return this.submissionsService.getEarningsStatsByCreator(creatorId);
     }
 
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'submission', userField: 'artist_id' })
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.submissionsService.findOne(id);
@@ -124,9 +130,8 @@ export class SubmissionsController {
         @Body() updateSubmissionDto: UpdateSubmissionDto,
     ) {
         return this.submissionsService.update(id, updateSubmissionDto);
-    }
-
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'submission', userField: 'artist_id' })
     @Delete(':id')
     remove(@Param('id') id: string) {
         return this.submissionsService.remove(id);

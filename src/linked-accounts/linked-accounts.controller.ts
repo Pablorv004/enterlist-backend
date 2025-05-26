@@ -13,7 +13,9 @@ import { CreateLinkedAccountDto, UpdateLinkedAccountDto } from './dto/linked-acc
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { RoleRequiredGuard } from '../auth/guards/role-required.guard';
+import { OwnershipGuard } from '../auth/guards/ownership.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Ownership } from '../auth/decorators/ownership.decorator';
 import { user_role } from '@prisma/client';
 
 @Controller('api/linked-accounts')
@@ -25,15 +27,15 @@ export class LinkedAccountsController {
     @Get()
     findAll() {
         return this.linkedAccountsService.findAll();
-    }
-
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'user', userField: 'user_id', paramName: 'userId' })
     @Get('user/:userId')
     findByUser(@Param('userId') userId: string) {
         return this.linkedAccountsService.findByUser(userId);
     }
 
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'linkedAccount', userField: 'user_id' })
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.linkedAccountsService.findOne(id);
@@ -45,7 +47,8 @@ export class LinkedAccountsController {
         return this.linkedAccountsService.create(createLinkedAccountDto);
     }
 
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'linkedAccount', userField: 'user_id' })
     @Put(':id')
     update(
         @Param('id') id: string,
@@ -54,7 +57,8 @@ export class LinkedAccountsController {
         return this.linkedAccountsService.update(id, updateLinkedAccountDto);
     }
 
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'linkedAccount', userField: 'user_id' })
     @Delete(':id')
     remove(@Param('id') id: string) {
         return this.linkedAccountsService.remove(id);
