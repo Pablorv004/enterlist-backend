@@ -101,34 +101,67 @@ export class SpotifyAuthService {
 
         if (!spotifyPlatform) {
             throw new NotFoundException('Spotify platform not found in database');
-        }
-
-        // Calculate token expiration date
+        }        // Calculate token expiration date
         const tokenExpiresAt = new Date();
-        tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);        // If this is a new user registration (from register-or-login endpoint)
-        if (isNewUser) {
-            // Check if a user with this Spotify ID already exists
-            const existingAccount = await this.prismaService.user.findFirst({
+        tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);
+        
+        // ALWAYS check if a user with this Spotify ID already exists (regardless of isNewUser flag)
+        const existingOAuthUser = await this.prismaService.user.findFirst({
+            where: {
+                oauth_provider: 'spotify',
+                oauth_id: profile.id,
+            }
+        });
+
+        if (existingOAuthUser) {
+            // User already exists with this OAuth account, log them in
+            userId = existingOAuthUser.user_id;
+            
+            // Update or create linked account for this existing user
+            const existingLinkedAccount = await this.prismaService.linkedAccount.findFirst({
                 where: {
-                    oauth_provider: spotifyPlatform.name.toLowerCase(),
-                    oauth_id: profile.id,
-                }
+                    user_id: userId,
+                    platform_id: spotifyPlatform.platform_id,
+                },
             });
 
-            if (existingAccount) {
-                // User already exists with this OAuth account, log them in
-                const tokenResult = this.authService.generateToken(existingAccount);
-                
-                // Check if user has a role - if not, they need role selection
-                const needsRoleSelection = !existingAccount.role;
-                
-                return {
-                    ...tokenResult,
-                    isNewUser: false,
-                    needsRoleSelection
+            if (existingLinkedAccount) {
+                // Update existing link
+                await this.prismaService.linkedAccount.update({
+                    where: { linked_account_id: existingLinkedAccount.linked_account_id },
+                    data: {
+                        access_token: tokenData.access_token,
+                        refresh_token: tokenData.refresh_token,
+                        token_expires_at: tokenExpiresAt,
+                    },
+                });
+            } else {
+                // Create new linked account
+                const linkedAccountData: CreateLinkedAccountDto = {
+                    user_id: userId,
+                    platform_id: spotifyPlatform.platform_id,
+                    external_user_id: profile.id,
+                    access_token: tokenData.access_token,
+                    refresh_token: tokenData.refresh_token,
+                    token_expires_at: tokenExpiresAt,
                 };
+                await this.linkedAccountsService.create(linkedAccountData);
             }
-
+            
+            const tokenResult = this.authService.generateToken(existingOAuthUser);
+            
+            // Check if user has a role - if not, they need role selection
+            const needsRoleSelection = !existingOAuthUser.role;
+            
+            return {
+                ...tokenResult,
+                isNewUser: false,
+                needsRoleSelection
+            };
+        }
+        
+        // If this is a new user registration (from register-or-login endpoint)
+        if (isNewUser) {
             // Register a new user with Spotify info
             const email = profile.email || `${profile.id}@spotify.user`;
             const username = profile.display_name || `spotify_user_${profile.id}`;
@@ -181,10 +214,11 @@ export class SpotifyAuthService {
                     token_expires_at: tokenExpiresAt,
                 },
             });
-        } else {
-            // Create new link
+        } else {            // Create new link
             await this.linkedAccountsService.create(linkedAccountData);
-        }        // For new users, return auth token with isNewUser flag
+        }
+        
+        // For new users, return auth token with isNewUser flag
         if (isNewUser) {
             const user = await this.prismaService.user.findUnique({
                 where: { user_id: userId },

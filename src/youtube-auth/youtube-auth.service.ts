@@ -107,34 +107,67 @@ export class YoutubeAuthService {
 
         if (!youtubePlatform) {
             throw new NotFoundException('YouTube platform not found in database');
-        }
-
-        // Calculate token expiration date
+        }        // Calculate token expiration date
         const tokenExpiresAt = new Date();
-        tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);        // If this is a new user registration (from register-or-login endpoint)
-        if (isNewUser) {
-            // Check if a user with this YouTube ID already exists
-            const existingAccount = await this.prismaService.user.findFirst({
+        tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);
+        
+        // ALWAYS check if a user with this YouTube ID already exists (regardless of isNewUser flag)
+        const existingOAuthUser = await this.prismaService.user.findFirst({
+            where: {
+                oauth_provider: 'youtube',
+                oauth_id: youtubeId,
+            }
+        });
+
+        if (existingOAuthUser) {
+            // User already exists with this OAuth account, log them in
+            userId = existingOAuthUser.user_id;
+            
+            // Update or create linked account for this existing user
+            const existingLinkedAccount = await this.prismaService.linkedAccount.findFirst({
                 where: {
-                    oauth_provider: youtubePlatform.name.toLowerCase(),
-                    oauth_id: youtubeId,
-                }
+                    user_id: userId,
+                    platform_id: youtubePlatform.platform_id,
+                },
             });
 
-            if (existingAccount) {
-                // User already exists with this OAuth account, log them in
-                const tokenResult = this.authService.generateToken(existingAccount);
-                
-                // Check if user has a role - if not, they need role selection
-                const needsRoleSelection = !existingAccount.role;
-                
-                return {
-                    ...tokenResult,
-                    isNewUser: false,
-                    needsRoleSelection
+            if (existingLinkedAccount) {
+                // Update existing link
+                await this.prismaService.linkedAccount.update({
+                    where: { linked_account_id: existingLinkedAccount.linked_account_id },
+                    data: {
+                        access_token: tokenData.access_token,
+                        refresh_token: tokenData.refresh_token,
+                        token_expires_at: tokenExpiresAt,
+                    },
+                });
+            } else {
+                // Create new linked account
+                const linkedAccountData: CreateLinkedAccountDto = {
+                    user_id: userId,
+                    platform_id: youtubePlatform.platform_id,
+                    external_user_id: youtubeId,
+                    access_token: tokenData.access_token,
+                    refresh_token: tokenData.refresh_token,
+                    token_expires_at: tokenExpiresAt,
                 };
+                await this.linkedAccountsService.create(linkedAccountData);
             }
-
+            
+            const tokenResult = this.authService.generateToken(existingOAuthUser);
+            
+            // Check if user has a role - if not, they need role selection
+            const needsRoleSelection = !existingOAuthUser.role;
+            
+            return {
+                ...tokenResult,
+                isNewUser: false,
+                needsRoleSelection
+            };
+        }
+        
+        // If this is a new user registration (from register-or-login endpoint)
+        if (isNewUser) {
             // Register a new user with YouTube info
             const email = profile.email || `${youtubeId}@youtube.user`;
             const username = profile.name || channelInfo?.items?.[0]?.snippet?.title || `youtube_user_${youtubeId}`;
