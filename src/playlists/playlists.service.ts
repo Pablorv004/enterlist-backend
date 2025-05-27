@@ -249,22 +249,6 @@ export class PlaylistsService {
     }   
     // Sync playlists - orchestrates sync across all connected platforms
     async syncPlaylists(userId: string): Promise<any> {
-        const results: {
-            spotify: any;
-            youtube: any;
-            totalUpdated: number;
-            totalErrors: number;
-            message: string;
-            errors: string[];
-        } = {
-            spotify: null,
-            youtube: null,
-            totalUpdated: 0,
-            totalErrors: 0,
-            message: '',
-            errors: []
-        };
-
         // Get user's linked accounts to determine which platforms to sync
         const linkedAccounts = await this.prismaService.linkedAccount.findMany({
             where: { user_id: userId },
@@ -272,24 +256,16 @@ export class PlaylistsService {
         });
 
         const syncPromises: Promise<any>[] = [];
+        let hasErrors = false;
 
         // Check for Spotify sync
         const spotifyAccount = linkedAccounts.find(acc => acc.platform.name === 'Spotify');
         if (spotifyAccount) {
             syncPromises.push(
                 this.spotifyAuthService.syncUserPlaylists(userId)
-                    .then(result => {
-                        results.spotify = result;
-                        results.totalUpdated += result.updated?.length || 0;
-                        results.totalErrors += result.errors?.length || 0;
-                        return result;
-                    })
                     .catch(error => {
-                        const errorMsg = `Spotify sync failed: ${error.message}`;
-                        results.errors.push(errorMsg);
-                        results.totalErrors++;
-                        results.spotify = { updated: [], errors: [errorMsg], message: errorMsg };
-                        return results.spotify;
+                        console.error('Spotify sync failed:', error);
+                        hasErrors = true;
                     })
             );
         }
@@ -299,18 +275,9 @@ export class PlaylistsService {
         if (youtubeAccount) {
             syncPromises.push(
                 this.youtubeAuthService.syncUserPlaylists(userId)
-                    .then(result => {
-                        results.youtube = result;
-                        results.totalUpdated += result.updated?.length || 0;
-                        results.totalErrors += result.errors?.length || 0;
-                        return result;
-                    })
                     .catch(error => {
-                        const errorMsg = `YouTube sync failed: ${error.message}`;
-                        results.errors.push(errorMsg);
-                        results.totalErrors++;
-                        results.youtube = { updated: [], errors: [errorMsg], message: errorMsg };
-                        return results.youtube;
+                        console.error('YouTube sync failed:', error);
+                        hasErrors = true;
                     })
             );
         }
@@ -318,7 +285,7 @@ export class PlaylistsService {
         // If no platforms are linked, return early
         if (syncPromises.length === 0) {
             return {
-                ...results,
+                success: false,
                 message: 'No connected platforms found to sync'
             };
         }
@@ -326,21 +293,9 @@ export class PlaylistsService {
         // Wait for all sync operations to complete
         await Promise.all(syncPromises);
 
-        // Compile overall message
-        const platformResults: string[] = [];
-        if (results.spotify) {
-            platformResults.push(`Spotify: ${results.spotify.updated?.length || 0} updated`);
-        }
-        if (results.youtube) {
-            platformResults.push(`YouTube: ${results.youtube.updated?.length || 0} updated`);
-        }
-
-        results.message = `Sync completed. ${platformResults.join(', ')}. Total: ${results.totalUpdated} playlists updated`;
-        
-        if (results.totalErrors > 0) {
-            results.message += `. ${results.totalErrors} error(s) occurred`;
-        }
-
-        return results;
+        return {
+            success: !hasErrors,
+            message: hasErrors ? 'Sync completed with some errors' : 'Sync complete!'
+        };
     }
 }
