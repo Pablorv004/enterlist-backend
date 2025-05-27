@@ -67,5 +67,12 @@ export class SongsController {
     remove(@Param('id') id: string) {
         return this.songsService.remove(id);
     }
+
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'user', userField: 'user_id', paramName: 'artistId' })
+    @Post('sync/:artistId')
+    syncSongs(@Param('artistId') artistId: string) {
+        return this.songsService.syncSongs(artistId);
+    }
 }
 

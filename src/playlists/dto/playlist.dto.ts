@@ -84,6 +84,10 @@ export class UpdatePlaylistDto {
     @IsBoolean()
     @IsOptional()
     deleted?: boolean;
+
+    @IsInt()
+    @IsOptional()
+    track_count?: number;
 }
 
 

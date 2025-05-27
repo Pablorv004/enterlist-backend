@@ -643,9 +643,7 @@ export class YoutubeAuthService {
 
                 const headers = {
                     'Authorization': `Bearer ${linkedAccount.access_token}`,
-                };
-
-                const { data } = await firstValueFrom(
+                };                const response = await firstValueFrom(
                     this.httpService.get(
                         `https://www.googleapis.com/youtube/v3/playlistItems?${params.toString()}`,
                         { headers }
@@ -666,6 +664,7 @@ export class YoutubeAuthService {
                         }),
                     ),
                 );
+                const data = response.data;
 
                 if (pageCount === 0) {
                     totalCount = data.pageInfo?.totalResults || 0;
@@ -755,9 +754,7 @@ export class YoutubeAuthService {
                     part: 'snippet,contentDetails',
                     id: playlistId,
                     key: this.apiKey
-                });
-
-                const { data: playlistData } = await firstValueFrom(
+                });                const playlistResponse = await firstValueFrom(
                     this.httpService.get(
                         `https://www.googleapis.com/youtube/v3/playlists?${params.toString()}`,
                         { headers }
@@ -767,6 +764,7 @@ export class YoutubeAuthService {
                         }),
                     ),
                 );
+                const playlistData = playlistResponse.data;
 
                 if (!playlistData.items || playlistData.items.length === 0) {
                     failedPlaylists.push({
@@ -1031,6 +1029,314 @@ export class YoutubeAuthService {
             updated: updatedVideos,
             failed: failedVideos,
             message: `Successfully imported ${importedVideos.length} video(s) and updated ${updatedVideos.length} video(s). ${failedVideos.length} video(s) failed.`
+        };
+    }
+
+    // Sync user playlists - updates existing playlists with fresh data from YouTube
+    async syncUserPlaylists(userId: string): Promise<any> {
+        // Find the YouTube platform
+        const youtubePlatform = await this.prismaService.platform.findFirst({
+            where: { name: 'YouTube' },
+        });
+
+        if (!youtubePlatform) {
+            throw new NotFoundException('YouTube platform not found in database');
+        }
+
+        // Find the user's linked YouTube account
+        const linkedAccount = await this.prismaService.linkedAccount.findFirst({
+            where: {
+                user_id: userId,
+                platform_id: youtubePlatform.platform_id,
+            },
+        });
+
+        if (!linkedAccount) {
+            throw new NotFoundException('YouTube account not linked for this user');
+        }
+
+        // Check if token is expired and refresh if needed
+        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
+            const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
+            linkedAccount.access_token = refreshedAccount.access_token;
+        }
+
+        // Get existing playlists from database for this user and platform
+        const existingPlaylists = await this.prismaService.playlist.findMany({
+            where: {
+                creator_id: userId,
+                platform_id: youtubePlatform.platform_id,
+                deleted: false
+            },
+            include: {
+                creator: {
+                    select: {
+                        username: true,
+                    },
+                },
+                platform: true,
+            },
+        });
+
+        if (existingPlaylists.length === 0) {
+            return {
+                updated: [],
+                errors: [],
+                message: 'No existing playlists found to sync'
+            };
+        }
+
+        // Get fresh playlist data from YouTube API
+        const playlistIds = existingPlaylists.map(p => p.platform_specific_id);
+        const headers = {
+            'Authorization': `Bearer ${linkedAccount.access_token}`,
+        };
+
+        let youtubePlaylists: any = { items: [] };
+        try {
+            // Fetch playlists in chunks of 50 (YouTube API limit)
+            const chunkSize = 50;
+            for (let i = 0; i < playlistIds.length; i += chunkSize) {
+                const chunk = playlistIds.slice(i, i + chunkSize);
+                  const params = new URLSearchParams({
+                    part: 'snippet,contentDetails',
+                    id: chunk.join(','),
+                    key: this.apiKey
+                });
+
+                const response = await firstValueFrom(
+                    this.httpService.get(
+                        `https://www.googleapis.com/youtube/v3/playlists?${params.toString()}`,
+                        { headers }
+                    ).pipe(
+                        catchError(error => {
+                            throw new BadRequestException(`Failed to fetch YouTube playlists: ${error.response?.data?.error?.message || error.message}`);
+                        }),
+                    ),
+                );
+                const data = response.data;
+
+                youtubePlaylists.items = youtubePlaylists.items.concat(data.items || []);
+            }
+        } catch (error) {
+            return {
+                updated: [],
+                errors: [`Failed to fetch playlists from YouTube: ${error.message}`],
+                message: 'Failed to sync playlists due to API error'
+            };
+        }
+
+        const updatedPlaylists: any[] = [];
+        const errors: string[] = [];
+
+        // Update each existing playlist with fresh data from YouTube
+        for (const existingPlaylist of existingPlaylists) {
+            try {
+                // Find the corresponding playlist in YouTube data
+                const youtubePlaylist = youtubePlaylists.items.find(
+                    (yp: any) => yp.id === existingPlaylist.platform_specific_id
+                );
+
+                if (youtubePlaylist) {
+                    // Update the existing playlist with fresh data from YouTube
+                    const updatedPlaylist = await this.prismaService.playlist.update({
+                        where: { playlist_id: existingPlaylist.playlist_id },
+                        data: {
+                            name: youtubePlaylist.snippet.title,
+                            description: youtubePlaylist.snippet.description || null,
+                            url: `https://www.youtube.com/playlist?list=${youtubePlaylist.id}`,
+                            cover_image_url: youtubePlaylist.snippet.thumbnails?.medium?.url || 
+                                youtubePlaylist.snippet.thumbnails?.default?.url || null,
+                            track_count: youtubePlaylist.contentDetails?.itemCount || 0,
+                            updated_at: new Date()
+                        },
+                        include: {
+                            creator: {
+                                select: {
+                                    username: true,
+                                },
+                            },
+                            platform: true,
+                        },
+                    });
+
+                    updatedPlaylists.push(updatedPlaylist);
+                } else {
+                    // Playlist no longer exists on YouTube, but we don't delete it
+                    // just log it as an error for the user to know
+                    errors.push(`Playlist "${existingPlaylist.name}" no longer exists on YouTube`);
+                }
+            } catch (error) {
+                console.error(`Failed to update playlist ${existingPlaylist.playlist_id}:`, error);
+                errors.push(`Failed to update playlist "${existingPlaylist.name}": ${error.message}`);
+            }
+        }
+
+        return {
+            updated: updatedPlaylists,
+            errors,
+            message: `Successfully updated ${updatedPlaylists.length} playlist(s). ${errors.length} error(s) occurred.`
+        };
+    }
+
+    // Sync user's existing tracks/songs with fresh data from YouTube
+    async syncUserTracks(userId: string): Promise<any> {
+        // Find the YouTube platform
+        const youtubePlatform = await this.prismaService.platform.findFirst({
+            where: { name: 'YouTube' },
+        });
+
+        if (!youtubePlatform) {
+            throw new NotFoundException('YouTube platform not found in database');
+        }
+
+        // Find the user's linked YouTube account
+        const linkedAccount = await this.prismaService.linkedAccount.findFirst({
+            where: {
+                user_id: userId,
+                platform_id: youtubePlatform.platform_id,
+            },
+        });
+
+        if (!linkedAccount) {
+            throw new NotFoundException('YouTube account not linked for this user');
+        }
+
+        // Check if token is expired and refresh if needed
+        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
+            const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
+            linkedAccount.access_token = refreshedAccount.access_token;
+        }
+
+        // Get existing songs from database for this user
+        const existingSongs = await this.prismaService.song.findMany({
+            where: {
+                artist_id: userId,
+                platform_id: youtubePlatform.platform_id,
+                deleted: false
+            }
+        });
+
+        if (existingSongs.length === 0) {
+            return {
+                updated: [],
+                errors: [],
+                message: 'No existing songs found to sync'
+            };
+        }
+
+        const headers = {
+            'Authorization': `Bearer ${linkedAccount.access_token}`,
+        };
+
+        const updatedSongs: any[] = [];
+        const syncErrors: any[] = [];
+
+        // Get video IDs for batching
+        const videoIds = existingSongs.map(song => song.platform_specific_id);
+
+        // Process videos in chunks of 50 (YouTube API limit)
+        const chunkSize = 50;
+        for (let i = 0; i < videoIds.length; i += chunkSize) {
+            const chunk = videoIds.slice(i, i + chunkSize);
+
+            try {                // Fetch fresh video details from YouTube API
+                const params = new URLSearchParams({
+                    part: 'snippet,contentDetails',
+                    id: chunk.join(','),
+                    key: this.apiKey
+                });
+
+                const response = await firstValueFrom(
+                    this.httpService.get(
+                        `https://www.googleapis.com/youtube/v3/videos?${params.toString()}`,
+                        { headers }
+                    ).pipe(
+                        catchError(error => {
+                            throw new BadRequestException(`Failed to fetch YouTube videos: ${error.response?.data?.error?.message || error.message}`);
+                        }),
+                    ),
+                );
+                const videosData = response.data;
+
+                for (const video of videosData.items || []) {
+                    if (!video) continue; // Skip null videos (deleted from platform)
+
+                    try {
+                        // Find the corresponding song in our database
+                        const existingSong = existingSongs.find(
+                            song => song.platform_specific_id === video.id
+                        );                        if (existingSong) {
+                            // Parse duration from YouTube format (PT#M#S) to milliseconds
+                            let durationMs: number | null = null;
+                            if (video.contentDetails?.duration) {
+                                const duration = video.contentDetails.duration;
+                                const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+                                if (match) {
+                                    const hours = parseInt(match[1] || '0');
+                                    const minutes = parseInt(match[2] || '0');
+                                    const seconds = parseInt(match[3] || '0');
+                                    durationMs = (hours * 3600 + minutes * 60 + seconds) * 1000;
+                                }
+                            }
+
+                            // Update the existing song with fresh data from YouTube
+                            const updatedSong = await this.prismaService.song.update({
+                                where: { song_id: existingSong.song_id },
+                                data: {
+                                    title: video.snippet.title,
+                                    artist_name_on_platform: video.snippet.channelTitle || 'Unknown Artist',
+                                    album_name: null, // YouTube doesn't have album concept
+                                    url: `https://www.youtube.com/watch?v=${video.id}`,
+                                    cover_image_url: video.snippet.thumbnails?.medium?.url || 
+                                        video.snippet.thumbnails?.default?.url || null,
+                                    duration_ms: durationMs,
+                                    updated_at: new Date()
+                                },
+                                include: {
+                                    artist: {
+                                        select: {
+                                            username: true,
+                                            email: true,
+                                        },
+                                    },
+                                    platform: true,
+                                },
+                            });
+
+                            updatedSongs.push(updatedSong);
+                        }
+                    } catch (error) {
+                        console.error(`Failed to sync song ${video.id}:`, error);
+                        syncErrors.push({
+                            id: video.id,
+                            title: video.snippet?.title || 'Unknown',
+                            error: error.message
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error(`Failed to fetch video chunk:`, error);
+                chunk.forEach(videoId => {
+                    const existingSong = existingSongs.find(song => song.platform_specific_id === videoId);
+                    syncErrors.push({
+                        id: videoId,
+                        title: existingSong?.title || 'Unknown',
+                        error: error.message
+                    });
+                });
+            }
+
+            // Add small delay to avoid rate limiting
+            if (i + chunkSize < videoIds.length) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+
+        return {
+            updated: updatedSongs,
+            errors: syncErrors,
+            message: `Successfully synced ${updatedSongs.length} song(s). ${syncErrors.length} error(s).`
         };
     }
 }

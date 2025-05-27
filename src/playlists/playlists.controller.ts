@@ -101,5 +101,15 @@ export class PlaylistsController {
     ) {
         return this.playlistsService.findByPlatform(platformId, skip, take);
     }
+
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @Ownership({ model: 'user', userField: 'user_id', paramName: 'userId' })
+    @Post('sync/:userId')
+    syncPlaylists(
+        @Param('userId') userId: string,
+        @Req() req: any
+    ) {
+        return this.playlistsService.syncPlaylists(userId);
+    }
 }
 

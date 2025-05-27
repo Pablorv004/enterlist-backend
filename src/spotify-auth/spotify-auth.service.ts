@@ -760,6 +760,229 @@ export class SpotifyAuthService {
         };
     }
 
+    async syncUserPlaylists(userId: string): Promise<any> {
+        // Find the Spotify platform
+        const spotifyPlatform = await this.prismaService.platform.findFirst({
+            where: { name: 'Spotify' },
+        });
+
+        if (!spotifyPlatform) {
+            throw new NotFoundException('Spotify platform not found in database');
+        }
+
+        // Get existing playlists from database
+        const existingPlaylists = await this.prismaService.playlist.findMany({
+            where: {
+                creator_id: userId,
+                platform_id: spotifyPlatform.platform_id,
+                deleted: false
+            }
+        });
+
+        if (existingPlaylists.length === 0) {
+            return {
+                updated: 0,
+                message: 'No existing playlists found to sync'
+            };
+        }
+
+        // Get fresh playlists from Spotify
+        const spotifyPlaylists = await this.getUserPlaylists(userId);
+        
+        const updatedPlaylists: any[] = [];
+        const syncErrors: any[] = [];
+
+        for (const existingPlaylist of existingPlaylists) {
+            try {
+                // Find the corresponding playlist in Spotify data
+                const spotifyPlaylist = spotifyPlaylists.items.find(
+                    (sp: any) => sp.id === existingPlaylist.platform_specific_id
+                );
+
+                if (spotifyPlaylist) {
+                    // Update the existing playlist with fresh data from Spotify
+                    const updatedPlaylist = await this.prismaService.playlist.update({
+                        where: { playlist_id: existingPlaylist.playlist_id },
+                        data: {
+                            name: spotifyPlaylist.name,
+                            description: spotifyPlaylist.description || null,
+                            url: spotifyPlaylist.external_urls?.spotify || null,
+                            cover_image_url: spotifyPlaylist.images?.[0]?.url || null,
+                            track_count: spotifyPlaylist.tracks?.total || 0,
+                            updated_at: new Date()
+                        },
+                        include: {
+                            creator: {
+                                select: {
+                                    username: true,
+                                },
+                            },
+                            platform: true,
+                        },
+                    });
+
+                    updatedPlaylists.push(updatedPlaylist);
+                }
+            } catch (error) {
+                console.error(`Failed to sync playlist ${existingPlaylist.playlist_id}:`, error);
+                syncErrors.push({
+                    id: existingPlaylist.playlist_id,
+                    name: existingPlaylist.name,
+                    error: error.message
+                });
+            }
+        }
+
+        return {
+            updated: updatedPlaylists.length,
+            errors: syncErrors.length,
+            message: `Successfully synced ${updatedPlaylists.length} playlist(s). ${syncErrors.length} error(s).`
+        };
+    }
+
+    // Sync user's existing tracks/songs with fresh data from Spotify
+    async syncUserTracks(userId: string): Promise<any> {
+        // Find the Spotify platform
+        const spotifyPlatform = await this.prismaService.platform.findFirst({
+            where: { name: 'Spotify' },
+        });
+
+        if (!spotifyPlatform) {
+            throw new NotFoundException('Spotify platform not found in database');
+        }
+
+        // Get existing songs from database for this user
+        const existingSongs = await this.prismaService.song.findMany({
+            where: {
+                artist_id: userId,
+                platform_id: spotifyPlatform.platform_id,
+                deleted: false
+            }
+        });
+
+        if (existingSongs.length === 0) {
+            return {
+                updated: [],
+                errors: [],
+                message: 'No existing songs found to sync'
+            };
+        }
+
+        // Find the user's linked Spotify account
+        const linkedAccount = await this.prismaService.linkedAccount.findFirst({
+            where: {
+                user_id: userId,
+                platform_id: spotifyPlatform.platform_id,
+            },
+        });
+
+        if (!linkedAccount) {
+            throw new NotFoundException('Spotify account not linked for this user');
+        }
+
+        // Check if token is expired and refresh if needed
+        if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
+            const refreshedAccount = await this.refreshAccessToken(userId, spotifyPlatform.platform_id);
+            linkedAccount.access_token = refreshedAccount.access_token;
+        }
+
+        const headers = {
+            'Authorization': `Bearer ${linkedAccount.access_token}`,
+        };
+
+        const updatedSongs: any[] = [];
+        const syncErrors: any[] = [];
+
+        // Get track IDs for batching
+        const trackIds = existingSongs.map(song => song.platform_specific_id);
+
+        // Process tracks in chunks of 50 (Spotify API limit)
+        const chunkSize = 50;
+        for (let i = 0; i < trackIds.length; i += chunkSize) {
+            const chunk = trackIds.slice(i, i + chunkSize);
+
+            try {
+                // Fetch fresh track details from Spotify API
+                const { data: tracksData } = await firstValueFrom(
+                    this.httpService.get(
+                        `https://api.spotify.com/v1/tracks?ids=${chunk.join(',')}`,
+                        { headers }
+                    ).pipe(
+                        catchError(error => {
+                            throw new BadRequestException(`Failed to fetch Spotify tracks: ${error.message}`);
+                        }),
+                    ),
+                );
+
+                for (const track of tracksData.tracks || []) {
+                    if (!track) continue; // Skip null tracks (deleted from platform)
+
+                    try {
+                        // Find the corresponding song in our database
+                        const existingSong = existingSongs.find(
+                            song => song.platform_specific_id === track.id
+                        );
+
+                        if (existingSong) {
+                            // Update the existing song with fresh data from Spotify
+                            const updatedSong = await this.prismaService.song.update({
+                                where: { song_id: existingSong.song_id },
+                                data: {
+                                    title: track.name,
+                                    artist_name_on_platform: track.artists.map((artist: any) => artist.name).join(', '),
+                                    album_name: track.album?.name || null,
+                                    url: track.external_urls?.spotify || null,
+                                    cover_image_url: track.album?.images?.[0]?.url || null,
+                                    duration_ms: track.duration_ms || null,
+                                    updated_at: new Date()
+                                },
+                                include: {
+                                    artist: {
+                                        select: {
+                                            username: true,
+                                            email: true,
+                                        },
+                                    },
+                                    platform: true,
+                                },
+                            });
+
+                            updatedSongs.push(updatedSong);
+                        }
+                    } catch (error) {
+                        console.error(`Failed to sync song ${track.id}:`, error);
+                        syncErrors.push({
+                            id: track.id,
+                            title: track.name || 'Unknown',
+                            error: error.message
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error(`Failed to fetch track chunk:`, error);
+                chunk.forEach(trackId => {
+                    const existingSong = existingSongs.find(song => song.platform_specific_id === trackId);
+                    syncErrors.push({
+                        id: trackId,
+                        title: existingSong?.title || 'Unknown',
+                        error: error.message
+                    });
+                });
+            }
+
+            // Add small delay to avoid rate limiting
+            if (i + chunkSize < trackIds.length) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+
+        return {
+            updated: updatedSongs,
+            errors: syncErrors,
+            message: `Successfully synced ${updatedSongs.length} song(s). ${syncErrors.length} error(s).`
+        };
+    }
+
     // Import tracks to the database (as songs)
     async importTracksToDatabase(userId: string, trackIds: string[]): Promise<any> {
         // Find the Spotify platform

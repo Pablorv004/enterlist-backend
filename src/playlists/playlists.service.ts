@@ -246,40 +246,101 @@ export class PlaylistsService {
                 platform: true,
             },
         });
-    }private getPlaylistUrl(playlist: any, platformName: string): string | undefined {
-        if (platformName === 'spotify') {
-            return playlist.external_urls?.spotify || undefined;
-        } else if (platformName === 'youtube') {
-            return `https://www.youtube.com/playlist?list=${playlist.id}`;
-        }
-        return undefined;
-    }
+    }   
+    // Sync playlists - orchestrates sync across all connected platforms
+    async syncPlaylists(userId: string): Promise<any> {
+        const results: {
+            spotify: any;
+            youtube: any;
+            totalUpdated: number;
+            totalErrors: number;
+            message: string;
+            errors: string[];
+        } = {
+            spotify: null,
+            youtube: null,
+            totalUpdated: 0,
+            totalErrors: 0,
+            message: '',
+            errors: []
+        };
 
-    private getPlaylistCoverImage(playlist: any, platformName: string): string | undefined {
-        if (platformName === 'spotify') {
-            return playlist.images?.[0]?.url || undefined;
-        } else if (platformName === 'youtube') {
-            return playlist.snippet?.thumbnails?.medium?.url || 
-                   playlist.snippet?.thumbnails?.default?.url || undefined;
-        }
-        return undefined;
-    }    // Add new method to get creator name for YouTube
-    private getCreatorName(playlist: any, platformName: string): string | undefined {
-        if (platformName === 'spotify') {
-            return playlist.owner?.display_name || undefined;
-        } else if (platformName === 'youtube') {
-            return playlist.snippet?.channelTitle || playlist.channelInfo?.channelTitle || undefined;
-        }
-        return undefined;
-    }
+        // Get user's linked accounts to determine which platforms to sync
+        const linkedAccounts = await this.prismaService.linkedAccount.findMany({
+            where: { user_id: userId },
+            include: { platform: true }
+        });
 
-    // Add new method to get track count for playlists
-    private getPlaylistTrackCount(playlist: any, platformName: string): number | undefined {
-        if (platformName === 'spotify') {
-            return playlist.tracks?.total || undefined;
-        } else if (platformName === 'youtube') {
-            return playlist.contentDetails?.itemCount || undefined;
+        const syncPromises: Promise<any>[] = [];
+
+        // Check for Spotify sync
+        const spotifyAccount = linkedAccounts.find(acc => acc.platform.name === 'Spotify');
+        if (spotifyAccount) {
+            syncPromises.push(
+                this.spotifyAuthService.syncUserPlaylists(userId)
+                    .then(result => {
+                        results.spotify = result;
+                        results.totalUpdated += result.updated?.length || 0;
+                        results.totalErrors += result.errors?.length || 0;
+                        return result;
+                    })
+                    .catch(error => {
+                        const errorMsg = `Spotify sync failed: ${error.message}`;
+                        results.errors.push(errorMsg);
+                        results.totalErrors++;
+                        results.spotify = { updated: [], errors: [errorMsg], message: errorMsg };
+                        return results.spotify;
+                    })
+            );
         }
-        return undefined;
+
+        // Check for YouTube sync
+        const youtubeAccount = linkedAccounts.find(acc => acc.platform.name === 'YouTube');
+        if (youtubeAccount) {
+            syncPromises.push(
+                this.youtubeAuthService.syncUserPlaylists(userId)
+                    .then(result => {
+                        results.youtube = result;
+                        results.totalUpdated += result.updated?.length || 0;
+                        results.totalErrors += result.errors?.length || 0;
+                        return result;
+                    })
+                    .catch(error => {
+                        const errorMsg = `YouTube sync failed: ${error.message}`;
+                        results.errors.push(errorMsg);
+                        results.totalErrors++;
+                        results.youtube = { updated: [], errors: [errorMsg], message: errorMsg };
+                        return results.youtube;
+                    })
+            );
+        }
+
+        // If no platforms are linked, return early
+        if (syncPromises.length === 0) {
+            return {
+                ...results,
+                message: 'No connected platforms found to sync'
+            };
+        }
+
+        // Wait for all sync operations to complete
+        await Promise.all(syncPromises);
+
+        // Compile overall message
+        const platformResults: string[] = [];
+        if (results.spotify) {
+            platformResults.push(`Spotify: ${results.spotify.updated?.length || 0} updated`);
+        }
+        if (results.youtube) {
+            platformResults.push(`YouTube: ${results.youtube.updated?.length || 0} updated`);
+        }
+
+        results.message = `Sync completed. ${platformResults.join(', ')}. Total: ${results.totalUpdated} playlists updated`;
+        
+        if (results.totalErrors > 0) {
+            results.message += `. ${results.totalErrors} error(s) occurred`;
+        }
+
+        return results;
     }
 }
