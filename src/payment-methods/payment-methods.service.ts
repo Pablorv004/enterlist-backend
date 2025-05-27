@@ -169,42 +169,10 @@ export class PaymentMethodsService {
             throw new ConflictException(
                 `Cannot delete payment method with ID ${id} as it is used in ${transactionsCount} transactions`
             );
-        }        return this.prismaService.paymentMethod.delete({
-            where: { payment_method_id: id },
-        });
-    }
-
-    async setAsDefault(id: string) {
-        const paymentMethod = await this.prismaService.paymentMethod.findUnique({
-            where: { payment_method_id: id },
-        });
-
-        if (!paymentMethod) {
-            throw new NotFoundException(`Payment Method with ID ${id} not found`);
         }
 
-        // First, set all payment methods for this user to not default
-        await this.prismaService.paymentMethod.updateMany({
-            where: { user_id: paymentMethod.user_id },
-            data: { is_default: false },
-        });
-
-        // Then set this specific payment method as default
-        return this.prismaService.paymentMethod.update({
+        return this.prismaService.paymentMethod.delete({
             where: { payment_method_id: id },
-            data: {
-                is_default: true,
-                updated_at: new Date(),
-            },
-            select: {
-                payment_method_id: true,
-                user_id: true,
-                type: true,
-                details: true,
-                is_default: true,
-                created_at: true,
-                updated_at: true,
-            },
         });
     }
 }
