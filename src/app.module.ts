@@ -15,9 +15,9 @@ import { HealthModule } from './health/health.module';
 import { SpotifyAuthModule } from './spotify-auth/spotify-auth.module';
 import { YoutubeAuthModule } from './youtube-auth/youtube-auth.module';
 import { PaypalAuthModule } from './paypal-auth/paypal-auth.module';
+import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 
-@Module({
-  imports: [
+@Module({  imports: [
     ConfigModule,
     PrismaModule,
     AuthModule,
@@ -30,6 +30,7 @@ import { PaypalAuthModule } from './paypal-auth/paypal-auth.module';
     HealthModule,    SpotifyAuthModule,
     YoutubeAuthModule,
     PaypalAuthModule,
+    PaymentMethodsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
