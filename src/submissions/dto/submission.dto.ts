@@ -25,6 +25,10 @@ export class CreateSubmissionDto {
     @IsString()
     @IsOptional()
     submission_message?: string;
+
+    @IsUUID()
+    @IsOptional()
+    payment_method_id?: string;
 }
 
 export class UpdateSubmissionDto {

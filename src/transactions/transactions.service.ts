@@ -1,12 +1,16 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionDto, UpdateTransactionDto } from './dto/transaction.dto';
+import { PaypalService } from './paypal.service';
 import { v4 as uuidv4 } from 'uuid';
 import { transaction_status, submission_status } from '@prisma/client';
 
 @Injectable()
 export class TransactionsService {
-    constructor(private readonly prismaService: PrismaService) { }
+    constructor(
+        private readonly prismaService: PrismaService,
+        private readonly paypalService: PaypalService,
+    ) { }
 
     async findAll(skip = 0, take = 10, status?: transaction_status) {
         const where = status ? { status } : {};
@@ -97,6 +101,60 @@ export class TransactionsService {
                 where: {
                     submission: {
                         artist_id: artistId,
+                    },
+                },
+            }),
+        ]);
+
+        return { data, total, skip, take };
+    }
+
+    async findByPlaylistOwner(ownerId: string, skip = 0, take = 10) {
+        const [data, total] = await Promise.all([
+            this.prismaService.transaction.findMany({
+                where: {
+                    submission: {
+                        playlist: {
+                            creator_id: ownerId,
+                        },
+                    },
+                },
+                skip,
+                take,
+                include: {
+                    submission: {
+                        include: {
+                            artist: {
+                                select: {
+                                    username: true,
+                                },
+                            },
+                            playlist: {
+                                select: {
+                                    name: true,
+                                },
+                            },
+                            song: {
+                                select: {
+                                    title: true,
+                                },
+                            },
+                        },
+                    },
+                    payment_method: {
+                        select: {
+                            type: true,
+                        },
+                    },
+                },
+                orderBy: { created_at: 'desc' },
+            }),
+            this.prismaService.transaction.count({
+                where: {
+                    submission: {
+                        playlist: {
+                            creator_id: ownerId,
+                        },
                     },
                 },
             }),
@@ -256,6 +314,290 @@ export class TransactionsService {
                 },
             },
         });
+    }
+
+    async getPlaylistMakerBalance(userId: string) {
+        const result = await this.prismaService.transaction.aggregate({
+            where: {
+                submission: {
+                    playlist: {
+                        creator_id: userId,
+                    },
+                },
+                status: transaction_status.succeeded,
+            },
+            _sum: {
+                creator_payout_amount: true,
+            },
+            _count: {
+                transaction_id: true,
+            },
+        });
+
+        const totalEarnings = result._sum.creator_payout_amount || 0;
+        const totalTransactions = result._count.transaction_id || 0;
+
+        // Get pending earnings (transactions that haven't been paid out yet)
+        const pendingResult = await this.prismaService.transaction.aggregate({
+            where: {
+                submission: {
+                    playlist: {
+                        creator_id: userId,
+                    },
+                },
+                status: transaction_status.processing,
+            },
+            _sum: {
+                creator_payout_amount: true,
+            },
+        });
+
+        const pendingEarnings = pendingResult._sum.creator_payout_amount || 0;
+
+        return {
+            total: Number(totalEarnings),
+            available: Number(totalEarnings) - Number(pendingEarnings),
+            pending: Number(pendingEarnings),
+            totalEarnings: Number(totalEarnings),
+            pendingEarnings: Number(pendingEarnings),
+            availableBalance: Number(totalEarnings) - Number(pendingEarnings),
+            totalTransactions,
+            currency: 'USD', // Default currency
+        };
+    }
+
+    async getEarningsStats(userId: string, period: 'day' | 'week' | 'month' | 'year') {
+        const now = new Date();
+        let startDate: Date;
+
+        switch (period) {
+            case 'day':
+                startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                break;
+            case 'week':
+                startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                break;
+            case 'month':
+                startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                break;
+            case 'year':
+                startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+                break;
+        }
+
+        const result = await this.prismaService.transaction.aggregate({
+            where: {
+                submission: {
+                    playlist: {
+                        creator_id: userId,
+                    },
+                },
+                status: transaction_status.succeeded,
+                created_at: {
+                    gte: startDate,
+                },
+            },
+            _sum: {
+                creator_payout_amount: true,
+            },
+            _count: {
+                transaction_id: true,
+            },
+        });
+
+        const earnings = result._sum.creator_payout_amount || 0;
+        const transactionCount = result._count.transaction_id || 0;
+
+        return {
+            period,
+            earnings: Number(earnings),
+            transactionCount,
+            currency: 'USD',
+        };
+    }
+
+    async processPayPalPayment(
+        submissionId: string,
+        paymentMethodId: string,
+        returnUrl: string,
+        cancelUrl: string
+    ) {
+        // Get submission details
+        const submission = await this.prismaService.submission.findUnique({
+            where: { submission_id: submissionId },
+            include: {
+                playlist: {
+                    include: {
+                        creator: true,
+                    },
+                },
+                song: true,
+                artist: true,
+            },
+        });
+
+        if (!submission) {
+            throw new NotFoundException('Submission not found');
+        }
+
+        // Get payment method
+        const paymentMethod = await this.prismaService.paymentMethod.findUnique({
+            where: { payment_method_id: paymentMethodId },
+        });
+
+        if (!paymentMethod) {
+            throw new NotFoundException('Payment method not found');
+        }
+
+        // Get playlist maker's PayPal email from their linked account
+        const playlistMakerPayPal = await this.prismaService.linkedAccount.findFirst({
+            where: {
+                user_id: submission.playlist.creator_id,
+                platform: {
+                    name: 'PayPal',
+                },
+            },
+        });
+
+        if (!playlistMakerPayPal) {
+            throw new BadRequestException('Playlist maker has not linked their PayPal account');
+        }
+
+        // Calculate fees
+        const submissionFeeAmount = Math.round(Number(submission.playlist.submission_fee) * 100); // Convert to cents
+        const platformFee = Math.round(submissionFeeAmount * 0.05); // 5% platform fee
+        const creatorPayout = submissionFeeAmount - platformFee;
+
+        // Get playlist maker's PayPal email from their linked account details
+        let playlistMakerEmail: string;
+        try {
+            const details = typeof playlistMakerPayPal.external_user_id === 'string' 
+                ? JSON.parse(playlistMakerPayPal.external_user_id) 
+                : playlistMakerPayPal.external_user_id;
+            playlistMakerEmail = details.email || details.user_id;
+        } catch {
+            playlistMakerEmail = playlistMakerPayPal.external_user_id;
+        }
+
+        // Create PayPal payment
+        const paymentDescription = `Song submission: "${submission.song.title}" to playlist "${submission.playlist.name}"`;
+        
+        const paypalPayment = await this.paypalService.createPayment(
+            submissionFeeAmount,
+            'USD',
+            paymentDescription,
+            playlistMakerEmail,
+            returnUrl,
+            cancelUrl
+        );
+
+        // Create transaction record
+        const transaction = await this.prismaService.transaction.create({
+            data: {
+                transaction_id: uuidv4(),
+                submission_id: submissionId,
+                payment_method_id: paymentMethodId,
+                amount_total: submissionFeeAmount / 100, // Store as decimal
+                currency: 'USD',
+                platform_fee: platformFee / 100,
+                creator_payout_amount: creatorPayout / 100,
+                status: transaction_status.pending,
+                payment_provider_transaction_id: paypalPayment.id,
+                created_at: new Date(),
+                updated_at: new Date(),
+            },
+            include: {
+                submission: {
+                    include: {
+                        artist: {
+                            select: {
+                                username: true,
+                            },
+                        },
+                        playlist: {
+                            select: {
+                                name: true,
+                            },
+                        },
+                        song: {
+                            select: {
+                                title: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        // Find the approval URL from PayPal response
+        const approvalUrl = paypalPayment.links.find(link => link.rel === 'approval_url')?.href;
+
+        return {
+            transaction,
+            paypalPayment,
+            approvalUrl,
+        };
+    }
+
+    async executePayPalPayment(paymentId: string, payerId: string) {
+        // Execute the PayPal payment
+        const executedPayment = await this.paypalService.executePayment(paymentId, payerId);
+
+        // Update transaction status
+        const transaction = await this.prismaService.transaction.findFirst({
+            where: {
+                payment_provider_transaction_id: paymentId,
+            },
+        });
+
+        if (!transaction) {
+            throw new NotFoundException('Transaction not found');
+        }
+
+        const updatedTransaction = await this.prismaService.transaction.update({
+            where: {
+                transaction_id: transaction.transaction_id,
+            },
+            data: {
+                status: transaction_status.succeeded,
+                updated_at: new Date(),
+            },
+            include: {
+                submission: {
+                    include: {
+                        artist: {
+                            select: {
+                                username: true,
+                            },
+                        },
+                        playlist: {
+                            select: {
+                                name: true,
+                            },
+                        },
+                        song: {
+                            select: {
+                                title: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        // Update submission status if payment is successful
+        if (executedPayment.state === 'approved') {
+            await this.prismaService.submission.update({
+                where: {
+                    submission_id: transaction.submission_id,
+                },
+                data: {
+                    status: submission_status.pending, // Set to pending for review
+                },
+            });
+        }
+
+        return updatedTransaction;
     }
 }
 

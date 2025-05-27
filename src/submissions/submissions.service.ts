@@ -437,9 +437,7 @@ export class SubmissionsService {
         }        // Aggregate earnings by month
         earningsData.forEach(transaction => {
             const monthKey = transaction.created_at.toISOString().substring(0, 7);
-            const amount = typeof transaction.creator_payout_amount === 'object' 
-                ? Number(transaction.creator_payout_amount) 
-                : (transaction.creator_payout_amount || 0);
+            const amount = Number(transaction.creator_payout_amount) || 0;
             monthlyEarnings[monthKey] += amount;
         });
 
@@ -448,7 +446,7 @@ export class SubmissionsService {
             const date = new Date(monthKey + '-01');
             return {
                 month: date.toLocaleDateString('en-US', { month: 'short' }),
-                amount: amount / 100 // Convert from cents to dollars
+                amount: Number(amount) // Keep as is since backend already stores in dollars
             };
         });
 

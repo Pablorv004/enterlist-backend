@@ -14,6 +14,7 @@ import { AdminActionsModule } from './admin-actions/admin-actions.module';
 import { HealthModule } from './health/health.module';
 import { SpotifyAuthModule } from './spotify-auth/spotify-auth.module';
 import { YoutubeAuthModule } from './youtube-auth/youtube-auth.module';
+import { PaypalAuthModule } from './paypal-auth/paypal-auth.module';
 
 @Module({
   imports: [
@@ -26,9 +27,9 @@ import { YoutubeAuthModule } from './youtube-auth/youtube-auth.module';
     PlaylistsModule,    SongsModule,
     SubmissionsModule,
     AdminActionsModule,
-    HealthModule,
-    SpotifyAuthModule,
+    HealthModule,    SpotifyAuthModule,
     YoutubeAuthModule,
+    PaypalAuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

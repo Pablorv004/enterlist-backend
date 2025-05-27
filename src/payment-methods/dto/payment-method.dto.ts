@@ -27,7 +27,7 @@ export class CreatePaymentMethodDto {
 
     @IsBoolean()
     @IsOptional()
-    is_default?: boolean;
+    is_default?: boolean = false;
 }
 
 export class UpdatePaymentMethodDto {

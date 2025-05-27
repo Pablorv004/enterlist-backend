@@ -27,7 +27,8 @@ export class LinkedAccountsController {
     @Get()
     findAll() {
         return this.linkedAccountsService.findAll();
-    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    }    
+    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'user', userField: 'user_id', paramName: 'userId' })
     @Get('user/:userId')
     findByUser(@Param('userId') userId: string) {
