@@ -74,14 +74,21 @@ export class PaymentMethodsController {
         @Body() updatePaymentMethodDto: UpdatePaymentMethodDto,
     ) {
         return this.paymentMethodsService.update(id, updatePaymentMethodDto);
-    }
-
-    @UseGuards(OwnershipGuard)
+    }    @UseGuards(OwnershipGuard)
     @Ownership({ model: 'paymentMethod', userField: 'user_id' })
     @Delete(':id')
     remove(@Param('id') id: string) {
         return this.paymentMethodsService.remove(id);
-    }    // PayPal specific endpoints
+    }
+
+    @UseGuards(OwnershipGuard)
+    @Ownership({ model: 'paymentMethod', userField: 'user_id' })
+    @Put(':id/default')
+    setAsDefault(@Param('id') id: string) {
+        return this.paymentMethodsService.setAsDefault(id);
+    }
+
+    // PayPal specific endpoints
     @Post('create-paypal-token')
     async createPaypalToken(@Body() body: { email: string }) {
         const { email } = body;
