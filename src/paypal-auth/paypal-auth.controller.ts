@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Req, Res, Post, Body, UseGuards, Param, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PaypalAuthService } from './paypal-auth.service';
@@ -83,5 +83,68 @@ export class PaypalAuthController {
             }
             return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(err.message)}`);
         }
+    }
+
+    @Get('user-email')
+    @UseGuards(JwtAuthGuard)
+    async getUserPayPalEmail(@Req() req) {
+        try {
+            const email = await this.paypalAuthService.getUserPayPalEmail(req.user.user_id);
+            return { email };
+        } catch (error) {
+            throw new UnauthorizedException('PayPal account not linked or invalid');
+        }
+    }
+
+    @Post('create-payment')
+    @UseGuards(JwtAuthGuard)
+    async createPayment(@Body() createPaymentDto: {
+        amount: number;
+        currency: string;
+        description: string;
+        returnUrl: string;
+        cancelUrl: string;
+    }) {
+        return await this.paypalAuthService.createPayment(
+            createPaymentDto.amount,
+            createPaymentDto.currency,
+            createPaymentDto.description,
+            createPaymentDto.returnUrl,
+            createPaymentDto.cancelUrl
+        );
+    }
+
+    @Post('execute-payment')
+    @UseGuards(JwtAuthGuard)
+    async executePayment(@Body() executePaymentDto: {
+        paymentId: string;
+        payerId: string;
+    }) {
+        return await this.paypalAuthService.executePayment(
+            executePaymentDto.paymentId,
+            executePaymentDto.payerId
+        );
+    }
+
+    @Get('payment/:id')
+    @UseGuards(JwtAuthGuard)
+    async getPayment(@Param('id') paymentId: string) {
+        return await this.paypalAuthService.getPayment(paymentId);
+    }
+
+    @Post('create-payout')
+    @UseGuards(JwtAuthGuard)
+    async createPayout(@Body() createPayoutDto: {
+        recipientEmail: string;
+        amount: number;
+        currency: string;
+        note: string;
+    }) {
+        return await this.paypalAuthService.createPayout(
+            createPayoutDto.recipientEmail,
+            createPayoutDto.amount,
+            createPayoutDto.currency,
+            createPayoutDto.note
+        );
     }
 }

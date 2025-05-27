@@ -1,10 +1,11 @@
-import { Injectable, UnauthorizedException, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { LinkedAccountsService } from '../linked-accounts/linked-accounts.service';
 import { CreateLinkedAccountDto } from '../linked-accounts/dto/linked-account.dto';
+import { firstValueFrom } from 'rxjs';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -288,6 +289,263 @@ export class PaypalAuthService {
         } catch (error) {
             this.logger.error('PayPal profile fetch failed:', error.response?.data || error.message);
             throw new UnauthorizedException('Failed to fetch PayPal user profile');
+        }
+    }
+
+    // Payment processing methods (integrated from paypal.service)
+    async getAccessToken(): Promise<string> {
+        try {
+            const credentials = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
+            
+            const response = await firstValueFrom(
+                this.httpService.post(
+                    `${this.baseUrl}/v1/oauth2/token`,
+                    'grant_type=client_credentials',
+                    {
+                        headers: {
+                            'Authorization': `Basic ${credentials}`,
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                    }
+                )
+            );
+
+            return response.data.access_token;
+        } catch (error) {
+            this.logger.error('Failed to get PayPal access token:', error.response?.data || error.message);
+            throw new UnauthorizedException('Failed to authenticate with PayPal');
+        }
+    }
+
+    async createPayment(
+        amount: number,
+        currency: string,
+        description: string,
+        returnUrl: string,
+        cancelUrl: string
+    ): Promise<any> {
+        try {
+            const accessToken = await this.getAccessToken();
+            
+            // For Enterlist payments, artist pays Enterlist (enterlist@business.com)
+            const paymentData = {
+                intent: 'sale',
+                payer: {
+                    payment_method: 'paypal'
+                },
+                transactions: [{
+                    amount: {
+                        total: (amount / 100).toFixed(2), // Convert from cents
+                        currency: currency
+                    },
+                    description: description,
+                    payee: {
+                        email: 'enterlist@business.com' // Enterlist receives payment
+                    }
+                }],
+                redirect_urls: {
+                    return_url: returnUrl,
+                    cancel_url: cancelUrl
+                }
+            };
+
+            const response = await firstValueFrom(
+                this.httpService.post(
+                    `${this.baseUrl}/v1/payments/payment`,
+                    paymentData,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json',
+                        },
+                    }
+                )
+            );
+
+            this.logger.log(`PayPal payment created with ID: ${response.data.id}`);
+            return response.data;
+        } catch (error) {
+            this.logger.error('Failed to create PayPal payment:', error.response?.data || error.message);
+            throw new BadRequestException('Failed to create PayPal payment');
+        }
+    }
+
+    async executePayment(paymentId: string, payerId: string): Promise<any> {
+        try {
+            const accessToken = await this.getAccessToken();
+            
+            const executeData = {
+                payer_id: payerId
+            };
+
+            const response = await firstValueFrom(
+                this.httpService.post(
+                    `${this.baseUrl}/v1/payments/payment/${paymentId}/execute`,
+                    executeData,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json',
+                        },
+                    }
+                )
+            );
+
+            this.logger.log(`PayPal payment executed successfully: ${paymentId}`);
+            return response.data;
+        } catch (error) {
+            this.logger.error('Failed to execute PayPal payment:', error.response?.data || error.message);
+            throw new BadRequestException('Failed to execute PayPal payment');
+        }
+    }
+
+    async getPayment(paymentId: string): Promise<any> {
+        try {
+            const accessToken = await this.getAccessToken();
+            
+            const response = await firstValueFrom(
+                this.httpService.get(
+                    `${this.baseUrl}/v1/payments/payment/${paymentId}`,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json',
+                        },
+                    }
+                )
+            );
+
+            return response.data;
+        } catch (error) {
+            this.logger.error('Failed to get PayPal payment:', error.response?.data || error.message);
+            throw new BadRequestException('Failed to get PayPal payment');
+        }
+    }
+
+    async createPayout(
+        recipientEmail: string,
+        amount: number,
+        currency: string,
+        note: string
+    ): Promise<any> {
+        try {
+            const accessToken = await this.getAccessToken();
+            
+            // Enterlist pays playlist makers when they withdraw
+            const payoutData = {
+                sender_batch_header: {
+                    sender_batch_id: `batch_${Date.now()}`,
+                    email_subject: 'Enterlist Payout - Withdrawal from your balance',
+                    email_message: note
+                },
+                items: [{
+                    recipient_type: 'EMAIL',
+                    amount: {
+                        value: (amount / 100).toFixed(2), // Convert from cents
+                        currency: currency
+                    },
+                    note: note,
+                    sender_item_id: `item_${Date.now()}`,
+                    receiver: recipientEmail
+                }]
+            };
+
+            const response = await firstValueFrom(
+                this.httpService.post(
+                    `${this.baseUrl}/v1/payments/payouts`,
+                    payoutData,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json',
+                        },
+                    }
+                )
+            );
+
+            this.logger.log(`PayPal payout created: ${response.data.batch_header.payout_batch_id}`);
+            return response.data;
+        } catch (error) {
+            this.logger.error('Failed to create PayPal payout:', error.response?.data || error.message);
+            throw new BadRequestException('Failed to create PayPal payout');
+        }
+    }
+
+    // Enhanced method to get user's PayPal email from linked account
+    async getUserPayPalEmail(userId: string): Promise<string> {
+        const paypalPlatform = await this.prismaService.platform.findFirst({
+            where: { name: 'PayPal' },
+        });
+
+        if (!paypalPlatform) {
+            throw new NotFoundException('PayPal platform not found');
+        }
+
+        const linkedAccount = await this.prismaService.linkedAccount.findFirst({
+            where: {
+                user_id: userId,
+                platform_id: paypalPlatform.platform_id,
+            },
+        });
+
+        if (!linkedAccount || !linkedAccount.access_token) {
+            throw new NotFoundException('User does not have a linked PayPal account');
+        }
+
+        // Get user profile from PayPal to get current email
+        try {
+            const profile = await this.getPayPalUserProfile(linkedAccount.access_token);
+            return profile.email;
+        } catch (error) {
+            // If token is expired, try to refresh it
+            if (linkedAccount.refresh_token) {
+                try {
+                    const newTokens = await this.refreshAccessToken(linkedAccount.refresh_token);
+                    
+                    // Update the stored tokens
+                    await this.prismaService.linkedAccount.update({
+                        where: { linked_account_id: linkedAccount.linked_account_id },
+                        data: {
+                            access_token: newTokens.access_token,
+                            refresh_token: newTokens.refresh_token || linkedAccount.refresh_token,
+                            token_expires_at: new Date(Date.now() + newTokens.expires_in * 1000),
+                        },
+                    });
+
+                    const profile = await this.getPayPalUserProfile(newTokens.access_token);
+                    return profile.email;
+                } catch (refreshError) {
+                    this.logger.error('Failed to refresh PayPal token:', refreshError);
+                    throw new UnauthorizedException('PayPal account needs to be re-linked');
+                }
+            } else {
+                throw new UnauthorizedException('PayPal account needs to be re-linked');
+            }
+        }
+    }
+
+    private async refreshAccessToken(refreshToken: string): Promise<any> {
+        try {
+            const tokenUrl = `${this.baseUrl}/v1/oauth2/token`;
+            
+            const data = new URLSearchParams({
+                grant_type: 'refresh_token',
+                refresh_token: refreshToken,
+            });
+
+            const credentials = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
+
+            const response = await this.httpService.axiosRef.post(tokenUrl, data, {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Authorization': `Basic ${credentials}`,
+                },
+            });
+
+            return response.data;
+        } catch (error) {
+            this.logger.error('PayPal token refresh failed:', error.response?.data || error.message);
+            throw new UnauthorizedException('Failed to refresh PayPal access token');
         }
     }
 

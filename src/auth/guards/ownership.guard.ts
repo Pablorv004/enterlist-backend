@@ -73,6 +73,20 @@ export class OwnershipGuard implements CanActivate {
                 return transaction.submission.artist_id === user.user_id;
             }
 
+            if (model === 'paymentMethod') {
+                // For payment methods, use the correct table name
+                const paymentMethod = await this.prismaService.paymentMethod.findUnique({
+                    where: { payment_method_id: resourceId },
+                    select: { [userField]: true },
+                });
+
+                if (!paymentMethod) {
+                    throw new ForbiddenException('Payment method not found');
+                }
+
+                return paymentMethod[userField] === user.user_id;
+            }
+
             const resource = await this.prismaService[model].findUnique({
                 where: { [`${model}_id`]: resourceId },
                 select: { [userField]: true },

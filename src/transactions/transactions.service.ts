@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionDto, UpdateTransactionDto } from './dto/transaction.dto';
-import { PaypalService } from './paypal.service';
+import { PaypalAuthService } from '../paypal-auth/paypal-auth.service';
 import { v4 as uuidv4 } from 'uuid';
 import { transaction_status, submission_status } from '@prisma/client';
 
@@ -9,7 +9,7 @@ import { transaction_status, submission_status } from '@prisma/client';
 export class TransactionsService {
     constructor(
         private readonly prismaService: PrismaService,
-        private readonly paypalService: PaypalService,
+        private readonly paypalAuthService: PaypalAuthService,
     ) { }
 
     async findAll(skip = 0, take = 10, status?: transaction_status) {
@@ -481,12 +481,10 @@ export class TransactionsService {
 
         // Create PayPal payment
         const paymentDescription = `Song submission: "${submission.song.title}" to playlist "${submission.playlist.name}"`;
-        
-        const paypalPayment = await this.paypalService.createPayment(
+          const paypalPayment = await this.paypalAuthService.createPayment(
             submissionFeeAmount,
             'USD',
             paymentDescription,
-            playlistMakerEmail,
             returnUrl,
             cancelUrl
         );
@@ -541,7 +539,7 @@ export class TransactionsService {
 
     async executePayPalPayment(paymentId: string, payerId: string) {
         // Execute the PayPal payment
-        const executedPayment = await this.paypalService.executePayment(paymentId, payerId);
+        const executedPayment = await this.paypalAuthService.executePayment(paymentId, payerId);
 
         // Update transaction status
         const transaction = await this.prismaService.transaction.findFirst({

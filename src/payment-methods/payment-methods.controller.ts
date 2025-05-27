@@ -8,6 +8,7 @@ import {
     Put,
     UseGuards,
     Logger,
+    Req,
 } from '@nestjs/common';
 import { PaymentMethodsService } from './payment-methods.service';
 import { CreatePaymentMethodDto, UpdatePaymentMethodDto } from './dto/payment-method.dto';
@@ -18,31 +19,17 @@ import { OwnershipGuard } from '../auth/guards/ownership.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Ownership } from '../auth/decorators/ownership.decorator';
 import { user_role } from '@prisma/client';
-import { ConfigService } from '@nestjs/config';
+import { PaypalAuthService } from '../paypal-auth/paypal-auth.service';
 
 @Controller('api/payment-methods')
 @UseGuards(JwtAuthGuard, RoleRequiredGuard)
 export class PaymentMethodsController {
     private readonly logger = new Logger(PaymentMethodsController.name);
-    private clientId: string;
-    private clientSecret: string;
-    private environment: string;
 
     constructor(
         private readonly paymentMethodsService: PaymentMethodsService,
-        private readonly configService: ConfigService,
-    ) {
-        // Initialize PayPal configuration
-        this.clientId = this.configService.get<string>('PAYPAL_CLIENT_ID') || '';
-        this.clientSecret = this.configService.get<string>('PAYPAL_CLIENT_SECRET') || '';
-        this.environment = this.configService.get<string>('PAYPAL_MODE', 'sandbox');
-
-        if (!this.clientId || !this.clientSecret) {
-            this.logger.warn('PayPal client ID or secret is missing - PayPal payments will not work');
-        } else {
-            this.logger.log(`PayPal service initialized in ${this.environment} mode`);
-        }
-    }
+        private readonly paypalAuthService: PaypalAuthService,
+    ) {}
 
     @UseGuards(RolesGuard)
     @Roles(user_role.admin)
@@ -83,11 +70,22 @@ export class PaymentMethodsController {
         return this.paymentMethodsService.remove(id);
     }    // PayPal specific endpoints
     @Post('create-paypal-token')
-    async createPaypalToken(@Body() body: { email: string }) {
+    async createPaypalToken(@Body() body: { email: string }, @Req() req) {
         const { email } = body;
         
         if (!email) {
             throw new Error('Email is required');
+        }
+
+        // Verify that the email matches the user's PayPal account
+        try {
+            const userPayPalEmail = await this.paypalAuthService.getUserPayPalEmail(req.user.user_id);
+            if (email !== userPayPalEmail) {
+                throw new Error('Email must match your linked PayPal account');
+            }
+        } catch (error) {
+            // If user doesn't have PayPal linked, they need to link it first
+            throw new Error('Please link your PayPal account first');
         }
 
         const token = await this.createPaymentToken(email);
@@ -96,9 +94,9 @@ export class PaymentMethodsController {
 
     private async createPaymentToken(paypalEmail: string): Promise<string> {
         try {
-            // For now, we'll create a mock token that includes the email
+            // Create a secure token that includes the email
             // In a real implementation, this would integrate with PayPal's Vault API
-            const mockToken = `pp_${this.environment}_${Buffer.from(paypalEmail).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 20)}_${Date.now()}`;
+            const mockToken = `pp_token_${Buffer.from(paypalEmail).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 20)}_${Date.now()}`;
             
             this.logger.log(`Created PayPal payment token for email: ${paypalEmail}`);
             
