@@ -34,7 +34,7 @@ export class PlaylistsService {
             }),            this.prismaService.playlist.count({
                 where: {
                     is_visible: true,
-                    deleted: { not: true },
+                    deleted: false,
                 },
             }),
         ]);
@@ -45,7 +45,7 @@ export class PlaylistsService {
             this.prismaService.playlist.findMany({
                 where: { 
                     creator_id: creatorId,
-                    deleted: { not: true },
+                    deleted: false,
                 },
                 skip,
                 take,
@@ -63,7 +63,7 @@ export class PlaylistsService {
             }),            this.prismaService.playlist.count({
                 where: { 
                     creator_id: creatorId,
-                    deleted: { not: true },
+                    deleted: false,
                 },
             }),
         ]);        return { data, total, skip, take };
@@ -73,7 +73,7 @@ export class PlaylistsService {
                 where: {
                     platform_id: platformId,
                     is_visible: true,
-                    deleted: { not: true },
+                    deleted: false,
                 },
                 skip,
                 take,

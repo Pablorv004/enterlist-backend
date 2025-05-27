@@ -44,8 +44,8 @@ export class YoutubeAuthService {
 
         // If userId is provided, this is for linking to existing account
         // If not, this is for registration/login flow
-        this.stateMap.set(state, { 
-            userId, 
+        this.stateMap.set(state, {
+            userId,
             expiresAt,
             isNewUser: !userId
         });
@@ -87,7 +87,7 @@ export class YoutubeAuthService {
 
         const isNewUser = stateData!.isNewUser;
         let userId = stateData!.userId;
-        
+
         this.stateMap.delete(state);
 
         // Exchange code for access and refresh tokens
@@ -95,7 +95,7 @@ export class YoutubeAuthService {
 
         // Get user profile from Google
         const profile = await this.getUserProfile(tokenData.access_token);
-        
+
         // Get YouTube channel info
         const channelInfo = await this.getYouTubeChannelInfo(tokenData.access_token);
         const youtubeId = channelInfo?.items?.[0]?.id || profile.id;
@@ -110,7 +110,7 @@ export class YoutubeAuthService {
         }        // Calculate token expiration date
         const tokenExpiresAt = new Date();
         tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);
-        
+
         // ALWAYS check if a user with this YouTube ID already exists (regardless of isNewUser flag)
         const existingOAuthUser = await this.prismaService.user.findFirst({
             where: {
@@ -122,7 +122,7 @@ export class YoutubeAuthService {
         if (existingOAuthUser) {
             // User already exists with this OAuth account, log them in
             userId = existingOAuthUser.user_id;
-            
+
             // Update or create linked account for this existing user
             const existingLinkedAccount = await this.prismaService.linkedAccount.findFirst({
                 where: {
@@ -153,11 +153,11 @@ export class YoutubeAuthService {
                 };
                 await this.linkedAccountsService.create(linkedAccountData);
             }
-              const tokenResult = this.authService.generateToken(existingOAuthUser);
-            
+            const tokenResult = this.authService.generateToken(existingOAuthUser);
+
             // Check if user has a role - if not, they need role selection
             const needsRoleSelection = !existingOAuthUser.role;
-            
+
             return {
                 ...tokenResult,
                 isNewUser: false,
@@ -165,27 +165,27 @@ export class YoutubeAuthService {
                 user: existingOAuthUser
             };
         }
-        
+
         // If this is a new user registration (from register-or-login endpoint)
         if (isNewUser) {
             // Register a new user with YouTube info
             const email = profile.email || `${youtubeId}@youtube.user`;
             const username = profile.name || channelInfo?.items?.[0]?.snippet?.title || `youtube_user_${youtubeId}`;
-            
+
             // Generate a random password - user won't need to know it
             // as they'll log in via YouTube OAuth
             const password = crypto.randomBytes(16).toString('hex');
-              const registerResult = await this.authService.register({
+            const registerResult = await this.authService.register({
                 email,
                 username,
                 password,
                 oauth_provider: 'youtube',
                 oauth_id: youtubeId,
             });
-            
+
             userId = registerResult.user.id;
         }
-        
+
         if (!userId) {
             throw new UnauthorizedException('User ID not found');
         }
@@ -226,11 +226,11 @@ export class YoutubeAuthService {
             const user = await this.prismaService.user.findUnique({
                 where: { user_id: userId },
             });
-            
+
             if (!user) {
                 throw new NotFoundException('User not found');
             }
-            
+
             const tokenResult = this.authService.generateToken(user);
             return {
                 ...tokenResult,
@@ -311,7 +311,7 @@ export class YoutubeAuthService {
             return { items: [] };
         }
     }
-    
+
     private cleanExpiredStates(): void {
         const now = new Date();
         for (const [key, value] of this.stateMap.entries()) {
@@ -353,7 +353,7 @@ export class YoutubeAuthService {
         // Fetch channels from YouTube API
         const headers = {
             'Authorization': `Bearer ${linkedAccount.access_token}`,
-        };        try {
+        }; try {
             const params = new URLSearchParams({
                 part: 'snippet,contentDetails,statistics',
                 mine: 'true',
@@ -410,7 +410,7 @@ export class YoutubeAuthService {
         // Fetch playlists from YouTube API
         const headers = {
             'Authorization': `Bearer ${linkedAccount.access_token}`,
-        };        try {
+        }; try {
             const params = new URLSearchParams({
                 part: 'snippet,contentDetails',
                 mine: 'true',
@@ -472,11 +472,11 @@ export class YoutubeAuthService {
 
         // First, get the user's channel ID
         const channelsResponse = await this.getUserChannels(userId);
-        
+
         if (!channelsResponse.items || channelsResponse.items.length === 0) {
             throw new BadRequestException('No YouTube channels found for this user');
         }
-        
+
         const channelId = channelsResponse.items[0].id;
 
         // Fetch videos from YouTube API
@@ -499,8 +499,9 @@ export class YoutubeAuthService {
             // If musicOnly is true, filter videos by music category
             if (musicOnly && data.items && data.items.length > 0) {
                 const videoIds = data.items.map((item: any) => item.id.videoId).join(',');
-                
-                try {                    const videoDetailsResponse = await firstValueFrom(
+
+                try {
+                    const videoDetailsResponse = await firstValueFrom(
                         this.httpService.get(
                             `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoIds}`,
                             { headers }
@@ -690,7 +691,7 @@ export class YoutubeAuthService {
                 allTracks = allTracks.concat(tracks);
                 nextPageToken = data.nextPageToken || '';
                 pageCount++;
-                
+
                 // Add small delay to avoid rate limiting
                 if (nextPageToken && pageCount < maxPages) {
                     await new Promise(resolve => setTimeout(resolve, 100));
@@ -744,7 +745,8 @@ export class YoutubeAuthService {
         };
 
         const importedPlaylists: any[] = [];
-        const skippedPlaylists: any[] = [];
+        const updatedPlaylists: any[] = [];
+        const failedPlaylists: any[] = [];
 
         for (const playlistId of playlistIds) {
             try {
@@ -767,7 +769,7 @@ export class YoutubeAuthService {
                 );
 
                 if (!playlistData.items || playlistData.items.length === 0) {
-                    skippedPlaylists.push({
+                    failedPlaylists.push({
                         id: playlistId,
                         name: 'Unknown',
                         reason: 'Playlist not found'
@@ -785,59 +787,76 @@ export class YoutubeAuthService {
                     },
                 });
 
+                const playlistUpdateData = {
+                    name: playlist.snippet.title,
+                    description: playlist.snippet.description || null,
+                    url: `https://www.youtube.com/playlist?list=${playlistId}`,
+                    cover_image_url: playlist.snippet.thumbnails?.medium?.url ||
+                        playlist.snippet.thumbnails?.default?.url || null,
+                    is_visible: true,
+                    track_count: playlist.contentDetails.itemCount || 0,
+                    deleted: false, // Restore if previously deleted
+                    updated_at: new Date(),
+                };
+
                 if (existingPlaylist) {
-                    skippedPlaylists.push({
-                        id: playlistId,
-                        name: playlist.snippet.title,
-                        reason: 'Already exists'
-                    });
-                    continue;
-                }
-
-                // Create the playlist in the database
-                const newPlaylist = await this.prismaService.playlist.create({
-                    data: {
-                        playlist_id: require('uuid').v4(),
-                        creator_id: userId,
-                        platform_id: youtubePlatform.platform_id,
-                        platform_specific_id: playlistId,
-                        name: playlist.snippet.title,
-                        description: playlist.snippet.description || null,
-                        url: `https://www.youtube.com/playlist?list=${playlistId}`,
-                        cover_image_url: playlist.snippet.thumbnails?.medium?.url ||                        playlist.snippet.thumbnails?.default?.url || null,
-                        is_visible: true,
-                        track_count: playlist.contentDetails.itemCount || 0,
-                        genre: null,
-                        submission_fee: 0,
-                        created_at: new Date(),
-                        updated_at: new Date(),
-                    },
-                    include: {
-                        creator: {
-                            select: {
-                                username: true,
-                                email: true,
+                    // Update existing playlist
+                    const updatedPlaylist = await this.prismaService.playlist.update({
+                        where: { playlist_id: existingPlaylist.playlist_id },
+                        data: playlistUpdateData,
+                        include: {
+                            creator: {
+                                select: {
+                                    username: true,
+                                    email: true,
+                                },
                             },
+                            platform: true,
                         },
-                        platform: true,
-                    },
-                });
+                    });
 
-                importedPlaylists.push(newPlaylist);
+                    updatedPlaylists.push(updatedPlaylist);
+                } else {
+                    // Create new playlist
+                    const newPlaylist = await this.prismaService.playlist.create({
+                        data: {
+                            playlist_id: require('uuid').v4(),
+                            creator_id: userId,
+                            platform_id: youtubePlatform.platform_id,
+                            platform_specific_id: playlistId,
+                            genre: null,
+                            submission_fee: 0,
+                            created_at: new Date(),
+                            ...playlistUpdateData,
+                        },
+                        include: {
+                            creator: {
+                                select: {
+                                    username: true,
+                                    email: true,
+                                },
+                            },
+                            platform: true,
+                        },
+                    });
+
+                    importedPlaylists.push(newPlaylist);
+                }
             } catch (error) {
-                console.error(`Failed to import playlist ${playlistId}:`, error);
-                skippedPlaylists.push({
+                console.error(`Failed to import/update playlist ${playlistId}:`, error);
+                failedPlaylists.push({
                     id: playlistId,
                     name: 'Unknown',
-                    reason: 'Import failed'
+                    reason: 'Import/update failed'
                 });
             }
         }
 
         return {
             imported: importedPlaylists,
-            skipped: skippedPlaylists,
-            message: `Successfully imported ${importedPlaylists.length} playlist(s). ${skippedPlaylists.length} playlist(s) were skipped.`
+            updated: updatedPlaylists,
+            failed: failedPlaylists,
+            message: `Successfully imported ${importedPlaylists.length} playlist(s) and updated ${updatedPlaylists.length} playlist(s). ${failedPlaylists.length} playlist(s) failed.`
         };
     }
 
@@ -875,13 +894,14 @@ export class YoutubeAuthService {
         };
 
         const importedVideos: any[] = [];
-        const skippedVideos: any[] = [];
+        const updatedVideos: any[] = [];
+        const failedVideos: any[] = [];
 
         // Process videos in chunks of 50 (YouTube API limit)
         const chunkSize = 50;
         for (let i = 0; i < videoIds.length; i += chunkSize) {
             const chunk = videoIds.slice(i, i + chunkSize);
-            
+
             try {
                 // Fetch video details from YouTube
                 const params = new URLSearchParams({
@@ -913,14 +933,7 @@ export class YoutubeAuthService {
                             },
                         });
 
-                        if (existingSong) {
-                            skippedVideos.push({
-                                id: video.id,
-                                title: video.snippet.title,
-                                reason: 'Already exists'
-                            });
-                            continue;
-                        }                        // Parse duration from ISO 8601 format (PT1M23S -> 83 seconds)
+                        // Parse duration from ISO 8601 format (PT1M23S -> 83 seconds)
                         let durationMs: number | null = null;
                         if (video.contentDetails?.duration) {
                             const duration = video.contentDetails.duration;
@@ -933,49 +946,73 @@ export class YoutubeAuthService {
                             }
                         }
 
-                        // Create the song in the database
-                        const newSong = await this.prismaService.song.create({
-                            data: {
-                                song_id: require('uuid').v4(),
-                                artist_id: userId, // The user importing becomes the artist
-                                platform_id: youtubePlatform.platform_id,
-                                platform_specific_id: video.id,
-                                title: video.snippet.title,
-                                artist_name_on_platform: video.snippet.channelTitle,
-                                album_name: null,
-                                url: `https://www.youtube.com/watch?v=${video.id}`,
-                                cover_image_url: video.snippet.thumbnails?.medium?.url || 
-                                               video.snippet.thumbnails?.default?.url || null,
-                                duration_ms: durationMs,
-                                is_visible: true,
-                                created_at: new Date(),
-                                updated_at: new Date(),
-                            },
-                            include: {
-                                artist: {
-                                    select: {
-                                        username: true,
-                                        email: true,
-                                    },
-                                },
-                                platform: true,
-                            },
-                        });
+                        const songUpdateData = {
+                            title: video.snippet.title,
+                            artist_name_on_platform: video.snippet.channelTitle,
+                            album_name: null,
+                            url: `https://www.youtube.com/watch?v=${video.id}`,
+                            cover_image_url: video.snippet.thumbnails?.medium?.url ||
+                                video.snippet.thumbnails?.default?.url || null,
+                            duration_ms: durationMs,
+                            is_visible: true,
+                            deleted: false, // Restore if previously deleted
+                            updated_at: new Date(),
+                        };
 
-                        importedVideos.push(newSong);
+                        if (existingSong) {
+                            // Update existing song
+                            const updatedSong = await this.prismaService.song.update({
+                                where: { song_id: existingSong.song_id },
+                                data: songUpdateData,
+                                include: {
+                                    artist: {
+                                        select: {
+                                            username: true,
+                                            email: true,
+                                        },
+                                    },
+                                    platform: true,
+                                },
+                            });
+
+                            updatedVideos.push(updatedSong);
+                        } else {
+                            // Create new song
+                            const newSong = await this.prismaService.song.create({
+                                data: {
+                                    song_id: require('uuid').v4(),
+                                    artist_id: userId, // The user importing becomes the artist
+                                    platform_id: youtubePlatform.platform_id,
+                                    platform_specific_id: video.id,
+                                    created_at: new Date(),
+                                    ...songUpdateData,
+                                },
+                                include: {
+                                    artist: {
+                                        select: {
+                                            username: true,
+                                            email: true,
+                                        },
+                                    },
+                                    platform: true,
+                                },
+                            });
+
+                            importedVideos.push(newSong);
+                        }
                     } catch (error) {
-                        console.error(`Failed to import video ${video.id}:`, error);
-                        skippedVideos.push({
+                        console.error(`Failed to import/update video ${video.id}:`, error);
+                        failedVideos.push({
                             id: video.id,
                             title: video.snippet?.title || 'Unknown',
-                            reason: 'Import failed'
+                            reason: 'Import/update failed'
                         });
                     }
                 }
             } catch (error) {
                 console.error(`Failed to fetch video chunk:`, error);
                 chunk.forEach(videoId => {
-                    skippedVideos.push({
+                    failedVideos.push({
                         id: videoId,
                         title: 'Unknown',
                         reason: 'Fetch failed'
@@ -991,8 +1028,9 @@ export class YoutubeAuthService {
 
         return {
             imported: importedVideos,
-            skipped: skippedVideos,
-            message: `Successfully imported ${importedVideos.length} video(s). ${skippedVideos.length} video(s) were skipped.`
+            updated: updatedVideos,
+            failed: failedVideos,
+            message: `Successfully imported ${importedVideos.length} video(s) and updated ${updatedVideos.length} video(s). ${failedVideos.length} video(s) failed.`
         };
     }
 }

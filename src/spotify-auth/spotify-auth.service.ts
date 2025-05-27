@@ -104,17 +104,17 @@ export class SpotifyAuthService {
         }        // Calculate token expiration date
         const tokenExpiresAt = new Date();
         tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);
-        
+
         // ALWAYS check if a user with this Spotify ID already exists (regardless of isNewUser flag)
         const existingOAuthUser = await this.prismaService.user.findFirst({
             where: {
                 oauth_provider: 'spotify',
                 oauth_id: profile.id,
             }
-        });        if (existingOAuthUser) {
+        }); if (existingOAuthUser) {
             // User already exists with this OAuth account, log them in
             userId = existingOAuthUser.user_id;
-            
+
             // Update or create linked account for this existing user
             const existingLinkedAccount = await this.prismaService.linkedAccount.findFirst({
                 where: {
@@ -145,12 +145,12 @@ export class SpotifyAuthService {
                 };
                 await this.linkedAccountsService.create(linkedAccountData);
             }
-            
+
             const tokenResult = this.authService.generateToken(existingOAuthUser);
-            
+
             // Check if user has a role - if not, they need role selection
             const needsRoleSelection = !existingOAuthUser.role;
-            
+
             return {
                 ...tokenResult,
                 isNewUser: false,
@@ -158,7 +158,7 @@ export class SpotifyAuthService {
                 user: existingOAuthUser
             };
         }
-        
+
         // If this is a new user registration (from register-or-login endpoint)
         if (isNewUser) {
             // Register a new user with Spotify info
@@ -167,7 +167,7 @@ export class SpotifyAuthService {
 
             // Generate a random password - user won't need to know it
             // as they'll log in via Spotify OAuth
-            const password = crypto.randomBytes(16).toString('hex');            const registerResult = await this.authService.register({
+            const password = crypto.randomBytes(16).toString('hex'); const registerResult = await this.authService.register({
                 email,
                 username,
                 password,
@@ -213,7 +213,7 @@ export class SpotifyAuthService {
         } else {            // Create new link
             await this.linkedAccountsService.create(linkedAccountData);
         }
-        
+
         // For new users, return auth token with isNewUser flag
         if (isNewUser) {
             const user = await this.prismaService.user.findUnique({
@@ -667,16 +667,14 @@ export class SpotifyAuthService {
         };
 
         const importedPlaylists: any[] = [];
-        const skippedPlaylists: any[] = [];
+        const updatedPlaylists: any[] = [];
+        const failedPlaylists: any[] = [];
 
         for (const playlistId of playlistIds) {
             try {
                 // Fetch playlist details from Spotify
                 const { data: playlistData } = await firstValueFrom(
-                    this.httpService.get(
-                        `https://api.spotify.com/v1/playlists/${playlistId}`,
-                        { headers }
-                    ).pipe(
+                    this.httpService.get(`https://api.spotify.com/v1/playlists/${playlistId}`, { headers }).pipe(
                         catchError(error => {
                             throw new BadRequestException(`Failed to fetch Spotify playlist ${playlistId}: ${error.message}`);
                         }),
@@ -691,61 +689,78 @@ export class SpotifyAuthService {
                     },
                 });
 
+                const playlistUpdateData = {
+                    name: playlistData.name,
+                    description: playlistData.description || null,
+                    url: playlistData.external_urls?.spotify || null,
+                    cover_image_url: playlistData.images?.[0]?.url || null,
+                    is_visible: true,
+                    track_count: playlistData.tracks?.total || 0,
+                    deleted: false, // Restore if previously deleted
+                    updated_at: new Date(),
+                };
+
                 if (existingPlaylist) {
-                    skippedPlaylists.push({
-                        id: playlistId,
-                        name: playlistData.name,
-                        reason: 'Already exists'
-                    });
-                    continue;
-                }
-
-                // Create the playlist in the database
-                const newPlaylist = await this.prismaService.playlist.create({
-                    data: {
-                        playlist_id: require('uuid').v4(),
-                        creator_id: userId,
-                        platform_id: spotifyPlatform.platform_id,
-                        platform_specific_id: playlistId,
-                        name: playlistData.name,
-                        description: playlistData.description || null,
-                        url: playlistData.external_urls?.spotify || null,
-                        cover_image_url: playlistData.images?.[0]?.url || null, 
-                        is_visible: true,
-                        track_count: playlistData.tracks?.total || 0,
-                        genre: null,
-                        submission_fee: 0,
-                        created_at: new Date(),
-                        updated_at: new Date(),
-                    },
-                    include: {
-                        creator: {
-                            select: {
-                                username: true,
-                                email: true,
+                    // Update existing playlist
+                    const updatedPlaylist = await this.prismaService.playlist.update({
+                        where: { playlist_id: existingPlaylist.playlist_id },
+                        data: playlistUpdateData,
+                        include: {
+                            creator: {
+                                select: {
+                                    username: true,
+                                    email: true,
+                                },
                             },
+                            platform: true,
                         },
-                        platform: true,
-                    },
-                });
+                    });
 
-                importedPlaylists.push(newPlaylist);
+                    updatedPlaylists.push(updatedPlaylist);
+                } else {
+                    // Create new playlist
+                    const newPlaylist = await this.prismaService.playlist.create({
+                        data: {
+                            playlist_id: uuidv4(),
+                            creator_id: userId,
+                            platform_id: spotifyPlatform.platform_id,
+                            platform_specific_id: playlistId,
+                            submission_fee: 0,
+                            created_at: new Date(),
+                            ...playlistUpdateData,
+                        },
+                        include: {
+                            creator: {
+                                select: {
+                                    username: true,
+                                    email: true,
+                                },
+                            },
+                            platform: true,
+                        },
+                    });
+
+                    importedPlaylists.push(newPlaylist);
+                }
             } catch (error) {
-                console.error(`Failed to import playlist ${playlistId}:`, error);
-                skippedPlaylists.push({
+                console.error(`Failed to import/update playlist ${playlistId}:`, error);
+                failedPlaylists.push({
                     id: playlistId,
                     name: 'Unknown',
-                    reason: 'Import failed'
+                    reason: 'Import/update failed'
                 });
             }
         }
 
         return {
             imported: importedPlaylists,
-            skipped: skippedPlaylists,
-            message: `Successfully imported ${importedPlaylists.length} playlist(s). ${skippedPlaylists.length} playlist(s) were skipped.`
+            updated: updatedPlaylists,
+            failed: failedPlaylists,
+            message: `Successfully imported ${importedPlaylists.length} playlist(s) and updated ${updatedPlaylists.length} playlist(s). ${failedPlaylists.length} playlist(s) failed.`
         };
-    }    // Import tracks to the database (as songs)
+    }
+
+    // Import tracks to the database (as songs)
     async importTracksToDatabase(userId: string, trackIds: string[]): Promise<any> {
         // Find the Spotify platform
         const spotifyPlatform = await this.prismaService.platform.findFirst({
@@ -779,7 +794,8 @@ export class SpotifyAuthService {
         };
 
         const importedTracks: any[] = [];
-        const skippedTracks: any[] = [];
+        const updatedTracks: any[] = [];
+        const failedTracks: any[] = [];
 
         // Process tracks in chunks of 50 (Spotify API limit)
         const chunkSize = 50;
@@ -799,7 +815,7 @@ export class SpotifyAuthService {
                     ),
                 );
 
-                for (const track of tracksData.tracks) {
+                for (const track of tracksData.tracks || []) {
                     if (!track) continue; // Skip null tracks
 
                     try {
@@ -811,57 +827,72 @@ export class SpotifyAuthService {
                             },
                         });
 
-                        if (existingSong) {
-                            skippedTracks.push({
-                                id: track.id,
-                                title: track.name,
-                                reason: 'Already exists'
-                            });
-                            continue;
-                        }
-
-                        // Create the song in the database
-                        const newSong = await this.prismaService.song.create({
-                            data: {
-                                song_id: require('uuid').v4(),
-                                artist_id: userId, // The user importing becomes the artist
-                                platform_id: spotifyPlatform.platform_id,
-                                platform_specific_id: track.id,
-                                title: track.name,
-                                artist_name_on_platform: track.artists.map(artist => artist.name).join(', '),
-                                album_name: track.album?.name || null,
-                                url: track.external_urls?.spotify || null,
-                                cover_image_url: track.album?.images?.[0]?.url || null,
-                                duration_ms: track.duration_ms || null,
-                                is_visible: true,
-                                created_at: new Date(),
-                                updated_at: new Date(),
-                            },
-                            include: {
-                                artist: {
-                                    select: {
-                                        username: true,
-                                        email: true,
-                                    },
-                                },
-                                platform: true,
-                            },
-                        });
-
-                        importedTracks.push(newSong);
-                    } catch (error) {
-                        console.error(`Failed to import track ${track.id}:`, error);
-                        skippedTracks.push({
-                            id: track.id,
+                        const songUpdateData = {
                             title: track.name,
-                            reason: 'Import failed'
+                            artist_name_on_platform: track.artists.map((artist: any) => artist.name).join(', '),
+                            album_name: track.album?.name || null,
+                            url: track.external_urls?.spotify || null,
+                            cover_image_url: track.album?.images?.[0]?.url || null,
+                            duration_ms: track.duration_ms || null,
+                            is_visible: true,
+                            deleted: false, // Restore if previously deleted
+                            updated_at: new Date(),
+                        };
+
+                        if (existingSong) {
+                            // Update existing song
+                            const updatedSong = await this.prismaService.song.update({
+                                where: { song_id: existingSong.song_id },
+                                data: songUpdateData,
+                                include: {
+                                    artist: {
+                                        select: {
+                                            username: true,
+                                            email: true,
+                                        },
+                                    },
+                                    platform: true,
+                                },
+                            });
+
+                            updatedTracks.push(updatedSong);
+                        } else {
+                            // Create new song
+                            const newSong = await this.prismaService.song.create({
+                                data: {
+                                    song_id: uuidv4(),
+                                    artist_id: userId,
+                                    platform_id: spotifyPlatform.platform_id,
+                                    platform_specific_id: track.id,
+                                    created_at: new Date(),
+                                    ...songUpdateData,
+                                },
+                                include: {
+                                    artist: {
+                                        select: {
+                                            username: true,
+                                            email: true,
+                                        },
+                                    },
+                                    platform: true,
+                                },
+                            });
+
+                            importedTracks.push(newSong);
+                        }
+                    } catch (error) {
+                        console.error(`Failed to import/update track ${track.id}:`, error);
+                        failedTracks.push({
+                            id: track.id,
+                            title: track.name || 'Unknown',
+                            reason: 'Import/update failed'
                         });
                     }
                 }
             } catch (error) {
                 console.error(`Failed to fetch track chunk:`, error);
                 chunk.forEach(trackId => {
-                    skippedTracks.push({
+                    failedTracks.push({
                         id: trackId,
                         title: 'Unknown',
                         reason: 'Fetch failed'
@@ -877,8 +908,9 @@ export class SpotifyAuthService {
 
         return {
             imported: importedTracks,
-            skipped: skippedTracks,
-            message: `Successfully imported ${importedTracks.length} track(s). ${skippedTracks.length} track(s) were skipped.`
+            updated: updatedTracks,
+            failed: failedTracks,
+            message: `Successfully imported ${importedTracks.length} track(s) and updated ${updatedTracks.length} track(s). ${failedTracks.length} track(s) failed.`
         };
     }
 }
