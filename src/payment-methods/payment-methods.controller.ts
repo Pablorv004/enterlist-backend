@@ -50,14 +50,14 @@ export class PaymentMethodsController {
     findAll() {
         return this.paymentMethodsService.findAll();
     }    @UseGuards(OwnershipGuard)
-    @Ownership({ model: 'user', userField: 'user_id', paramName: 'artistId' })
-    @Get('artist/:artistId')
-    findByArtist(@Param('artistId') artistId: string) {
-        return this.paymentMethodsService.findByArtist(artistId);
+    @Ownership({ model: 'user', userField: 'user_id', paramName: 'userId' })
+    @Get('user/:userId')
+    findByUser(@Param('userId') userId: string) {
+        return this.paymentMethodsService.findByUser(userId);
     }
 
     @UseGuards(OwnershipGuard)
-    @Ownership({ model: 'paymentMethod', userField: 'artist_id' })
+    @Ownership({ model: 'paymentMethod', userField: 'user_id' })
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.paymentMethodsService.findOne(id);
@@ -67,7 +67,7 @@ export class PaymentMethodsController {
     create(@Body() createPaymentMethodDto: CreatePaymentMethodDto) {
         return this.paymentMethodsService.create(createPaymentMethodDto);
     }    @UseGuards(OwnershipGuard)
-    @Ownership({ model: 'paymentMethod', userField: 'artist_id' })
+    @Ownership({ model: 'paymentMethod', userField: 'user_id' })
     @Put(':id')
     update(
         @Param('id') id: string,
@@ -77,7 +77,7 @@ export class PaymentMethodsController {
     }
 
     @UseGuards(OwnershipGuard)
-    @Ownership({ model: 'paymentMethod', userField: 'artist_id' })
+    @Ownership({ model: 'paymentMethod', userField: 'user_id' })
     @Delete(':id')
     remove(@Param('id') id: string) {
         return this.paymentMethodsService.remove(id);

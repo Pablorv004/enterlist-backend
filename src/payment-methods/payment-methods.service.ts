@@ -13,13 +13,13 @@ export class PaymentMethodsService {
         const data = await this.prismaService.paymentMethod.findMany({
             select: {
                 payment_method_id: true,
-                artist_id: true,
+                user_id: true,
                 type: true,
                 details: true,
                 is_default: true,
                 created_at: true,
                 updated_at: true,
-                artist: {
+                users: {
                     select: {
                         username: true,
                         email: true,
@@ -32,9 +32,9 @@ export class PaymentMethodsService {
         return { data, total };
     }
 
-    async findByArtist(artistId: string) {
+    async findByUser(userId: string) {
         const data = await this.prismaService.paymentMethod.findMany({
-            where: { artist_id: artistId },
+            where: { user_id: userId },
             select: {
                 payment_method_id: true,
                 type: true,
@@ -54,13 +54,13 @@ export class PaymentMethodsService {
             where: { payment_method_id: id },
             select: {
                 payment_method_id: true,
-                artist_id: true,
+                user_id: true,
                 type: true,
                 details: true,
                 is_default: true,
                 created_at: true,
                 updated_at: true,
-                artist: {
+                users: {
                     select: {
                         username: true,
                         email: true,
@@ -77,23 +77,19 @@ export class PaymentMethodsService {
     }
 
     async create(createPaymentMethodDto: CreatePaymentMethodDto) {
-        const { artist_id, is_default } = createPaymentMethodDto;
+        const { user_id, is_default } = createPaymentMethodDto;
 
-        const artist = await this.prismaService.user.findUnique({
-            where: { user_id: artist_id },
+        const user = await this.prismaService.user.findUnique({
+            where: { user_id: user_id },
         });
 
-        if (!artist) {
-            throw new NotFoundException(`Artist with ID ${artist_id} not found`);
-        }
-
-        if (artist.role !== 'artist' && artist.role !== 'admin') {
-            throw new ConflictException(`User must be an artist to add payment methods`);
+        if (!user) {
+            throw new NotFoundException(`User with ID ${user_id} not found`);
         }
 
         if (is_default) {
             await this.prismaService.paymentMethod.updateMany({
-                where: { artist_id },
+                where: { user_id },
                 data: { is_default: false },
             });
         }
@@ -107,7 +103,7 @@ export class PaymentMethodsService {
             },
             select: {
                 payment_method_id: true,
-                artist_id: true,
+                user_id: true,
                 type: true,
                 details: true,
                 is_default: true,
@@ -131,7 +127,7 @@ export class PaymentMethodsService {
         if (is_default) {
             await this.prismaService.paymentMethod.updateMany({
                 where: {
-                    artist_id: paymentMethod.artist_id,
+                    user_id: paymentMethod.user_id,
                     NOT: { payment_method_id: id },
                 },
                 data: { is_default: false },
@@ -146,7 +142,7 @@ export class PaymentMethodsService {
             },
             select: {
                 payment_method_id: true,
-                artist_id: true,
+                user_id: true,
                 type: true,
                 details: true,
                 is_default: true,

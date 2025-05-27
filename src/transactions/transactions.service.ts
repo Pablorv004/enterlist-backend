@@ -234,7 +234,7 @@ export class TransactionsService {
             throw new NotFoundException(`Payment Method with ID ${payment_method_id} not found`);
         }
 
-        if (paymentMethod.artist_id !== submission.artist_id) {
+        if (paymentMethod.user_id !== submission.artist_id) {
             throw new ConflictException(`Payment method does not belong to the submission artist`);
         }
 

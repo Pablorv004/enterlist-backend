@@ -11,7 +11,7 @@ import { payment_method_type } from '@prisma/client';
 export class CreatePaymentMethodDto {
     @IsUUID()
     @IsNotEmpty()
-    artist_id: string;
+    user_id: string;
 
     @IsEnum(payment_method_type)
     @IsNotEmpty()
