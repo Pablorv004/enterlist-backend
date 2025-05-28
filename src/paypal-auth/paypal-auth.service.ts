@@ -3,8 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
-import { LinkedAccountsService } from '../linked-accounts/linked-accounts.service';
-import { CreateLinkedAccountDto } from '../linked-accounts/dto/linked-account.dto';
 import { firstValueFrom } from 'rxjs';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
@@ -17,15 +15,12 @@ export class PaypalAuthService {
     private readonly environment: string;
     private readonly baseUrl: string;
     private readonly stateMap = new Map<string, { userId?: string; expiresAt: Date; isNewUser?: boolean }>();
-    private readonly logger = new Logger(PaypalAuthService.name);
-
-    constructor(
+    private readonly logger = new Logger(PaypalAuthService.name);    constructor(
         private readonly configService: ConfigService,
         private readonly httpService: HttpService,
-        private readonly linkedAccountsService: LinkedAccountsService,
         private readonly prismaService: PrismaService,
         private readonly authService: AuthService,
-    ) {        this.clientId = this.configService.get<string>('PAYPAL_CLIENT_ID') || '';
+    ) {this.clientId = this.configService.get<string>('PAYPAL_CLIENT_ID') || '';
         this.clientSecret = this.configService.get<string>('PAYPAL_CLIENT_SECRET') || '';
         this.environment = this.configService.get<string>('PAYPAL_MODE', 'sandbox');
         this.baseUrl = this.environment === 'live' 
@@ -102,22 +97,7 @@ export class PaypalAuthService {
         const tokenData = await this.exchangeCodeForTokens(code);
 
         // Get user profile from PayPal
-        const profile = await this.getPayPalUserProfile(tokenData.access_token);
-
-        // Find PayPal platform in our database
-        const paypalPlatform = await this.prismaService.platform.findFirst({
-            where: { name: 'PayPal' },
-        });
-
-        if (!paypalPlatform) {
-            throw new NotFoundException('PayPal platform not found in database');
-        }
-
-        // Calculate token expiration date
-        const tokenExpiresAt = new Date();
-        tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);
-
-        // ALWAYS check if a user with this PayPal ID already exists (regardless of isNewUser flag)
+        const profile = await this.getPayPalUserProfile(tokenData.access_token);        // ALWAYS check if a user with this PayPal ID already exists (regardless of isNewUser flag)
         const existingOAuthUser = await this.prismaService.user.findFirst({
             where: {
                 oauth_provider: 'paypal',
@@ -128,37 +108,6 @@ export class PaypalAuthService {
         if (existingOAuthUser) {
             // User already exists with this OAuth account, log them in
             userId = existingOAuthUser.user_id;
-
-            // Update or create linked account for this existing user
-            const existingLinkedAccount = await this.prismaService.linkedAccount.findFirst({
-                where: {
-                    user_id: userId,
-                    platform_id: paypalPlatform.platform_id,
-                },
-            });
-
-            if (existingLinkedAccount) {
-                // Update existing link
-                await this.prismaService.linkedAccount.update({
-                    where: { linked_account_id: existingLinkedAccount.linked_account_id },
-                    data: {
-                        access_token: tokenData.access_token,
-                        refresh_token: tokenData.refresh_token,
-                        token_expires_at: tokenExpiresAt,
-                    },
-                });
-            } else {
-                // Create new linked account
-                const linkedAccountData: CreateLinkedAccountDto = {
-                    user_id: userId,
-                    platform_id: paypalPlatform.platform_id,
-                    external_user_id: profile.user_id,
-                    access_token: tokenData.access_token,
-                    refresh_token: tokenData.refresh_token,
-                    token_expires_at: tokenExpiresAt,
-                };
-                await this.linkedAccountsService.create(linkedAccountData);
-            }
 
             const tokenResult = this.authService.generateToken(existingOAuthUser);
 
@@ -192,44 +141,11 @@ export class PaypalAuthService {
             });
 
             userId = registerResult.user.id;
-        }
-
-        if (!userId) {
+        }        if (!userId) {
             throw new UnauthorizedException('User ID not found');
         }
 
-        // Create or update linked account
-        const linkedAccountData: CreateLinkedAccountDto = {
-            user_id: userId,
-            platform_id: paypalPlatform.platform_id,
-            external_user_id: profile.user_id,
-            access_token: tokenData.access_token,
-            refresh_token: tokenData.refresh_token,
-            token_expires_at: tokenExpiresAt,
-        };
-
-        // Check if the user already has a linked PayPal account
-        const existingAccount = await this.prismaService.linkedAccount.findFirst({
-            where: {
-                user_id: userId,
-                platform_id: paypalPlatform.platform_id,
-            },
-        });
-
-        if (existingAccount) {
-            // Update existing link
-            await this.prismaService.linkedAccount.update({
-                where: { linked_account_id: existingAccount.linked_account_id },
-                data: {
-                    access_token: tokenData.access_token,
-                    refresh_token: tokenData.refresh_token,
-                    token_expires_at: tokenExpiresAt,
-                },
-            });
-        } else {
-            // Create new link
-            await this.linkedAccountsService.create(linkedAccountData);
-        }        // Create a payment method for the linked PayPal account
+        // Create a payment method for the linked PayPal account
         const paymentMethodDetails = {
             email: profile.email || `${profile.user_id}@paypal.user`,
             name: profile.name || 'PayPal Account',
@@ -525,53 +441,31 @@ export class PaypalAuthService {
             this.logger.error('Failed to create PayPal payout:', error.response?.data || error.message);
             throw new BadRequestException('Failed to create PayPal payout');
         }
-    }
-
-    // Enhanced method to get user's PayPal email from linked account
+    }    // Enhanced method to get user's PayPal email from payment method
     async getUserPayPalEmail(userId: string): Promise<string> {
-        const paypalPlatform = await this.prismaService.platform.findFirst({
-            where: { name: 'PayPal' },
-        });
-
-        if (!paypalPlatform) {
-            throw new NotFoundException('PayPal platform not found');
-        }
-
-        const linkedAccount = await this.prismaService.linkedAccount.findFirst({
+        const paymentMethod = await this.prismaService.paymentMethod.findFirst({
             where: {
                 user_id: userId,
-                platform_id: paypalPlatform.platform_id,
+                type: 'paypal',
             },
         });
 
-        if (!linkedAccount || !linkedAccount.access_token) {
+        if (!paymentMethod) {
             throw new NotFoundException('User does not have a linked PayPal account');
         }
 
-        // Get user profile from PayPal to get current email
+        // Get email from payment method details
         try {
-            const profile = await this.getPayPalUserProfile(linkedAccount.access_token);
-            return profile.email;
+            const details = JSON.parse(paymentMethod.details);
+            return details.email;
         } catch (error) {
-            // If token is expired, try to refresh it
-            if (linkedAccount.refresh_token) {
+            // If details parsing fails, try to get from PayPal API using stored token
+            if (paymentMethod.provider_token) {
                 try {
-                    const newTokens = await this.refreshAccessToken(linkedAccount.refresh_token);
-                    
-                    // Update the stored tokens
-                    await this.prismaService.linkedAccount.update({
-                        where: { linked_account_id: linkedAccount.linked_account_id },
-                        data: {
-                            access_token: newTokens.access_token,
-                            refresh_token: newTokens.refresh_token || linkedAccount.refresh_token,
-                            token_expires_at: new Date(Date.now() + newTokens.expires_in * 1000),
-                        },
-                    });
-
-                    const profile = await this.getPayPalUserProfile(newTokens.access_token);
+                    const profile = await this.getPayPalUserProfile(paymentMethod.provider_token);
                     return profile.email;
-                } catch (refreshError) {
-                    this.logger.error('Failed to refresh PayPal token:', refreshError);
+                } catch (tokenError) {
+                    this.logger.error('Failed to get PayPal email from token:', tokenError);
                     throw new UnauthorizedException('PayPal account needs to be re-linked');
                 }
             } else {

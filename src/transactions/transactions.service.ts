@@ -449,19 +449,15 @@ export class TransactionsService {
         // Get payment method
         const paymentMethod = await this.prismaService.paymentMethod.findUnique({
             where: { payment_method_id: paymentMethodId },
-        });
-
-        if (!paymentMethod) {
+        });        if (!paymentMethod) {
             throw new NotFoundException('Payment method not found');
         }
 
-        // Get playlist maker's PayPal email from their linked account
-        const playlistMakerPayPal = await this.prismaService.linkedAccount.findFirst({
+        // Get playlist maker's PayPal payment method
+        const playlistMakerPayPal = await this.prismaService.paymentMethod.findFirst({
             where: {
                 user_id: submission.playlist.creator_id,
-                platform: {
-                    name: 'PayPal',
-                },
+                type: 'paypal',
             },
         });
 
@@ -474,15 +470,16 @@ export class TransactionsService {
         const platformFee = Math.round(submissionFeeAmount * 0.05); // 5% platform fee
         const creatorPayout = submissionFeeAmount - platformFee;
 
-        // Get playlist maker's PayPal email from their linked account details
+        // Get playlist maker's PayPal email from their payment method details
         let playlistMakerEmail: string;
         try {
-            const details = typeof playlistMakerPayPal.external_user_id === 'string' 
-                ? JSON.parse(playlistMakerPayPal.external_user_id) 
-                : playlistMakerPayPal.external_user_id;
+            const details = typeof playlistMakerPayPal.details === 'string' 
+                ? JSON.parse(playlistMakerPayPal.details) 
+                : playlistMakerPayPal.details;
             playlistMakerEmail = details.email || details.user_id;
         } catch {
-            playlistMakerEmail = playlistMakerPayPal.external_user_id;
+            // If details is not JSON, assume it's the email directly
+            playlistMakerEmail = playlistMakerPayPal.details;
         }
 
         // Create PayPal payment
