@@ -23,30 +23,48 @@ export class PaypalAuthController {
     async getLoginUrl(@Req() req) {
         const authUrl = await this.paypalAuthService.getAuthorizationUrl(req.user.user_id);
         return { url: authUrl };
-    }
-
-    @Get('register-or-login')
-    async registerOrLogin(@Res() res: Response) {
-        // This endpoint doesn't require authentication as it's for new users
-        const authUrl = await this.paypalAuthService.getAuthorizationUrl();
-        return res.redirect(authUrl);
-    }
-
-    @Get('callback')
+    }    @Get('callback')
     async callback(
         @Query('code') code: string,
         @Query('state') state: string,
         @Query('error') error: string,
         @Query('mobile') mobile: string,
+        @Query('popup') popup: string,
         @Req() req,
         @Res() res: Response,
     ) {
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
         const isMobile = mobile === 'true' || req.headers['user-agent']?.includes('Capacitor');
+        const isPopup = popup === 'true';
         
         if (error) {
             if (isMobile) {
                 return res.redirect(`enterlist://oauth/error?error=${encodeURIComponent(error)}`);
+            }
+            if (isPopup) {
+                // For popup, create a special close page that communicates with parent
+                return res.send(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>PayPal Authentication</title>
+                    </head>
+                    <body>
+                        <script>
+                            if (window.opener) {
+                                window.opener.postMessage({
+                                    type: 'PAYPAL_OAUTH_ERROR',
+                                    error: '${error.replace(/'/g, "\\'")}',
+                                    provider: 'paypal'
+                                }, '${frontendUrl}');
+                                window.close();
+                            } else {
+                                window.location.href = '${frontendUrl}/login?error=${encodeURIComponent(error)}';
+                            }
+                        </script>
+                    </body>
+                    </html>
+                `);
             }
             return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(error)}`);
         }
@@ -54,7 +72,52 @@ export class PaypalAuthController {
         try {
             const result = await this.paypalAuthService.handleCallback(code, state);
             
-            // Create common parameters for both mobile and web
+            if (isMobile) {
+                // For mobile, redirect with tokens in URL parameters
+                const params = new URLSearchParams({
+                    access_token: result.access_token,
+                    user: JSON.stringify(result.user),
+                    status: 'success',
+                    provider: 'paypal',
+                    isNewUser: result.isNewUser?.toString() || 'false',
+                    needsRoleSelection: result.needsRoleSelection?.toString() || 'false'
+                });
+                return res.redirect(`enterlist://oauth/callback?${params.toString()}`);
+            }
+            
+            if (isPopup) {
+                // For popup, create a special close page that communicates with parent
+                return res.send(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>PayPal Authentication Success</title>
+                    </head>
+                    <body>
+                        <div style="text-align: center; padding: 20px; font-family: Arial, sans-serif;">
+                            <h2>✓ PayPal Account Connected Successfully</h2>
+                            <p>Closing window...</p>
+                        </div>
+                        <script>
+                            if (window.opener) {
+                                window.opener.postMessage({
+                                    type: 'PAYPAL_OAUTH_SUCCESS',
+                                    success: true,
+                                    provider: 'paypal'
+                                }, '${frontendUrl}');
+                                window.close();
+                            } else {
+                                // Fallback if not in popup
+                                window.location.href = '${frontendUrl}/payment-methods?success=paypal-connected';
+                            }
+                        </script>
+                    </body>
+                    </html>
+                `);
+            }
+            
+            // Web flow - use query parameters instead of cookies
+            // Check if this is a new user or existing user that needs role selection
             const params = new URLSearchParams({
                 access_token: result.access_token,
                 user: JSON.stringify(result.user),
@@ -64,13 +127,6 @@ export class PaypalAuthController {
                 needsRoleSelection: result.needsRoleSelection?.toString() || 'false'
             });
             
-            if (isMobile) {
-                // For mobile, redirect with tokens in URL parameters
-                return res.redirect(`enterlist://oauth/callback?${params.toString()}`);
-            }
-            
-            // Web flow - use query parameters instead of cookies
-            // Check if this is a new user or existing user that needs role selection
             if (result.isNewUser || result.needsRoleSelection) {
                 return res.redirect(`${frontendUrl}/role-selection?${params.toString()}`);
             }
@@ -80,6 +136,31 @@ export class PaypalAuthController {
         } catch (err) {
             if (isMobile) {
                 return res.redirect(`enterlist://oauth/error?error=${encodeURIComponent(err.message)}`);
+            }
+            if (isPopup) {
+                // For popup, create a special close page that communicates with parent
+                return res.send(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>PayPal Authentication Error</title>
+                    </head>
+                    <body>
+                        <script>
+                            if (window.opener) {
+                                window.opener.postMessage({
+                                    type: 'PAYPAL_OAUTH_ERROR',
+                                    error: '${err.message.replace(/'/g, "\\'")}',
+                                    provider: 'paypal'
+                                }, '${frontendUrl}');
+                                window.close();
+                            } else {
+                                window.location.href = '${frontendUrl}/login?error=${encodeURIComponent(err.message)}';
+                            }
+                        </script>
+                    </body>
+                    </html>
+                `);
             }
             return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(err.message)}`);
         }
