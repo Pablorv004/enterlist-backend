@@ -64,4 +64,23 @@ export class UsersController {
     selectRole(@Req() req, @Body() updateRoleDto: UpdateRoleDto) {
         return this.usersService.updateRole(req.user.user_id, updateRoleDto.role);
     }
+
+    // Profile-related endpoints
+    @UseGuards(JwtAuthGuard)
+    @Get('profile/statistics')
+    getProfileStatistics(@Req() req) {
+        return this.usersService.getProfileStatistics(req.user.user_id);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Put('profile/deactivate')
+    deactivateAccount(@Req() req) {
+        return this.usersService.deactivateAccount(req.user.user_id);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Put('profile/password')
+    updatePassword(@Req() req, @Body() body: { currentPassword: string; newPassword: string }) {
+        return this.usersService.updatePassword(req.user.user_id, body.currentPassword, body.newPassword);
+    }
 }
