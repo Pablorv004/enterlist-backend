@@ -16,12 +16,14 @@ export class PaypalAuthController {
     async login(@Req() req, @Res() res: Response) {
         const authUrl = await this.paypalAuthService.getAuthorizationUrl(req.user.user_id);
         return res.redirect(authUrl);
-    }    @Get('login-url')
+    }
+
+    @Get('login-url')
     @UseGuards(JwtAuthGuard)
-    async getLoginUrl(@Req() req, @Query('popup') popup: string) {
-        const authUrl = await this.paypalAuthService.getAuthorizationUrl(req.user.user_id, popup === 'true');
+    async getLoginUrl(@Req() req) {
+        const authUrl = await this.paypalAuthService.getAuthorizationUrl(req.user.user_id);
         return { url: authUrl };
-    }@Get('callback')
+    }    @Get('callback')
     async callback(
         @Query('code') code: string,
         @Query('state') state: string,
@@ -105,34 +107,22 @@ export class PaypalAuthController {
                             <h2>✓ PayPal Account Connected Successfully</h2>
                             <p>Closing window...</p>
                         </div>                        <script>
-                            function closeWindow() {
-                                if (window.opener) {
-                                    // Send success message to parent window
-                                    window.opener.postMessage({
-                                        type: 'PAYPAL_OAUTH_SUCCESS',
-                                        success: true,
-                                        provider: 'paypal',
-                                        linkedAccount: ${result.linkedAccount || false},
-                                        timestamp: Date.now()
-                                    }, '*'); // Use '*' for origin to avoid issues
-                                    
-                                    // Wait longer to ensure message is received
-                                    setTimeout(() => {
-                                        try {
-                                            window.close();
-                                        } catch (e) {
-                                            console.log('Window close failed:', e);
-                                        }
-                                    }, 1000);
-                                } else {
-                                    // Fallback if not in popup
-                                    window.location.href = '${frontendUrl}/payment-methods?success=paypal-connected';
-                                }
+                            if (window.opener) {
+                                window.opener.postMessage({
+                                    type: 'PAYPAL_OAUTH_SUCCESS',
+                                    success: true,
+                                    provider: 'paypal',
+                                    linkedAccount: ${result.linkedAccount || false}
+                                }, '${frontendUrl}');
+                                
+                                // Give time for the message to be received, then close
+                                setTimeout(() => {
+                                    window.close();
+                                }, 500);
+                            } else {
+                                // Fallback if not in popup
+                                window.location.href = '${frontendUrl}/payment-methods?success=paypal-connected';
                             }
-                            
-                            // Try to close immediately and also set a backup timer
-                            closeWindow();
-                            setTimeout(closeWindow, 500);
                         </script>
                     </body>
                     </html>
@@ -177,31 +167,20 @@ export class PaypalAuthController {
                         <title>PayPal Authentication Error</title>
                     </head>
                     <body>                        <script>
-                            function sendError() {
-                                if (window.opener) {
-                                    window.opener.postMessage({
-                                        type: 'PAYPAL_OAUTH_ERROR',
-                                        error: '${err.message.replace(/'/g, "\\'")}',
-                                        provider: 'paypal',
-                                        timestamp: Date.now()
-                                    }, '*'); // Use '*' for origin to avoid issues
-                                    
-                                    // Wait longer to ensure message is received
-                                    setTimeout(() => {
-                                        try {
-                                            window.close();
-                                        } catch (e) {
-                                            console.log('Window close failed:', e);
-                                        }
-                                    }, 1000);
-                                } else {
-                                    window.location.href = '${frontendUrl}/login?error=${encodeURIComponent(err.message)}';
-                                }
+                            if (window.opener) {
+                                window.opener.postMessage({
+                                    type: 'PAYPAL_OAUTH_ERROR',
+                                    error: '${err.message.replace(/'/g, "\\'")}',
+                                    provider: 'paypal'
+                                }, '${frontendUrl}');
+                                
+                                // Give time for the message to be received, then close
+                                setTimeout(() => {
+                                    window.close();
+                                }, 500);
+                            } else {
+                                window.location.href = '${frontendUrl}/login?error=${encodeURIComponent(err.message)}';
                             }
-                            
-                            // Try to send error immediately and also set a backup timer
-                            sendError();
-                            setTimeout(sendError, 500);
                         </script>
                     </body>
                     </html>
