@@ -7,6 +7,7 @@ import { LinkedAccountsService } from '../linked-accounts/linked-accounts.servic
 import { CreateLinkedAccountDto } from '../linked-accounts/dto/linked-account.dto';
 import { firstValueFrom } from 'rxjs';
 import * as crypto from 'crypto';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class PaypalAuthService {
@@ -228,6 +229,44 @@ export class PaypalAuthService {
         } else {
             // Create new link
             await this.linkedAccountsService.create(linkedAccountData);
+        }        // Create a payment method for the linked PayPal account
+        const paymentMethodDetails = {
+            email: profile.email || `${profile.user_id}@paypal.user`,
+            name: profile.name || 'PayPal Account',
+            user_id: profile.user_id
+        };
+
+        // Check if user already has a PayPal payment method
+        const existingPaymentMethod = await this.prismaService.paymentMethod.findFirst({
+            where: {
+                user_id: userId,
+                type: 'paypal',
+            },
+        });
+
+        if (!existingPaymentMethod) {            // Create a new payment method
+            await this.prismaService.paymentMethod.create({
+                data: {
+                    payment_method_id: uuidv4(),
+                    user_id: userId,
+                    type: 'paypal',
+                    provider_token: tokenData.access_token,
+                    details: JSON.stringify(paymentMethodDetails),
+                    is_default: true, // Make it default if it's the first payment method
+                    created_at: new Date(),
+                    updated_at: new Date(),
+                },
+            });
+        } else {
+            // Update existing payment method
+            await this.prismaService.paymentMethod.update({
+                where: { payment_method_id: existingPaymentMethod.payment_method_id },
+                data: {
+                    provider_token: tokenData.access_token,
+                    details: JSON.stringify(paymentMethodDetails),
+                    updated_at: new Date(),
+                },
+            });
         }
 
         // For new users, return auth token
@@ -244,11 +283,23 @@ export class PaypalAuthService {
             return {
                 ...tokenResult,
                 isNewUser: true,
-                needsRoleSelection: !user.role
+                needsRoleSelection: !user.role,
+                user
             };
         }
 
-        return { success: true, isNewUser: false, needsRoleSelection: false };
+        // For existing users linking account, return success
+        const user = await this.prismaService.user.findUnique({
+            where: { user_id: userId },
+        });
+
+        return { 
+            success: true, 
+            isNewUser: false, 
+            needsRoleSelection: false,
+            user,
+            linkedAccount: true
+        };
     }
 
     private async exchangeCodeForTokens(code: string): Promise<any> {

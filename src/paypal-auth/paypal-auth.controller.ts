@@ -67,10 +67,17 @@ export class PaypalAuthController {
                 `);
             }
             return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(error)}`);
-        }
-
-        try {
+        }        try {
             const result = await this.paypalAuthService.handleCallback(code, state);
+            console.log('PayPal callback result:', { 
+                success: result.success,
+                isNewUser: result.isNewUser,
+                needsRoleSelection: result.needsRoleSelection,
+                linkedAccount: result.linkedAccount,
+                hasAccessToken: !!result.access_token,
+                isPopup,
+                isMobile
+            });
             
             if (isMobile) {
                 // For mobile, redirect with tokens in URL parameters
@@ -84,8 +91,7 @@ export class PaypalAuthController {
                 });
                 return res.redirect(`enterlist://oauth/callback?${params.toString()}`);
             }
-            
-            if (isPopup) {
+              if (isPopup) {
                 // For popup, create a special close page that communicates with parent
                 return res.send(`
                     <!DOCTYPE html>
@@ -103,7 +109,8 @@ export class PaypalAuthController {
                                 window.opener.postMessage({
                                     type: 'PAYPAL_OAUTH_SUCCESS',
                                     success: true,
-                                    provider: 'paypal'
+                                    provider: 'paypal',
+                                    linkedAccount: ${result.linkedAccount || false}
                                 }, '${frontendUrl}');
                                 window.close();
                             } else {
@@ -115,24 +122,32 @@ export class PaypalAuthController {
                     </html>
                 `);
             }
-            
-            // Web flow - use query parameters instead of cookies
+              // Web flow - use query parameters instead of cookies
             // Check if this is a new user or existing user that needs role selection
-            const params = new URLSearchParams({
-                access_token: result.access_token,
-                user: JSON.stringify(result.user),
-                status: 'success',
-                provider: 'paypal',
-                isNewUser: result.isNewUser?.toString() || 'false',
-                needsRoleSelection: result.needsRoleSelection?.toString() || 'false'
-            });
-            
-            if (result.isNewUser || result.needsRoleSelection) {
-                return res.redirect(`${frontendUrl}/role-selection?${params.toString()}`);
+            if (result.access_token) {
+                // This is a login/registration flow
+                const params = new URLSearchParams({
+                    access_token: result.access_token,
+                    user: JSON.stringify(result.user),
+                    status: 'success',
+                    provider: 'paypal',
+                    isNewUser: result.isNewUser?.toString() || 'false',
+                    needsRoleSelection: result.needsRoleSelection?.toString() || 'false'
+                });
+                
+                if (result.isNewUser || result.needsRoleSelection) {
+                    return res.redirect(`${frontendUrl}/role-selection?${params.toString()}`);
+                }
+                
+                // If existing user with role, go to dashboard
+                return res.redirect(`${frontendUrl}/dashboard?${params.toString()}`);
+            } else if (result.linkedAccount) {
+                // This is an account linking flow for existing users
+                return res.redirect(`${frontendUrl}/payment-methods?success=paypal-connected`);
+            } else {
+                // Fallback
+                return res.redirect(`${frontendUrl}/dashboard?success=paypal-connected`);
             }
-            
-            // If existing user with role, go to dashboard
-            return res.redirect(`${frontendUrl}/dashboard?${params.toString()}`);
         } catch (err) {
             if (isMobile) {
                 return res.redirect(`enterlist://oauth/error?error=${encodeURIComponent(err.message)}`);
