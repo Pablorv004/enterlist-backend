@@ -55,9 +55,9 @@ export class PaypalAuthService {
         });
 
         // Clean up expired states
-        this.cleanupExpiredStates();        const scopes = [
+        this.cleanupExpiredStates();        
+        const scopes = [
             'openid',
-            'profile',
             'email',
         ].join(' ');
 
