@@ -232,23 +232,19 @@ export class UsersService {
             _count: {
                 submission_id: true
             }
-        });
-
-        // Get spending over time (monthly) - using proper field names
+        });        // Get spending over time (monthly) - using proper field names
         const spendingOverTime = await this.prismaService.$queryRaw`
             SELECT 
                 DATE_TRUNC('month', t.created_at) as month,
                 SUM(t.amount_total) as total_spent
             FROM transactions t
             INNER JOIN submissions s ON t.submission_id = s.submission_id
-            WHERE s.artist_id = ${artistId}
+            WHERE s.artist_id = ${artistId}::uuid
                 AND t.status = 'succeeded'
             GROUP BY DATE_TRUNC('month', t.created_at)
             ORDER BY month DESC
             LIMIT 12
-        `;
-
-        // Get most expensive genres
+        `;        // Get most expensive genres
         const genreSpending = await this.prismaService.$queryRaw`
             SELECT 
                 p.genre,
@@ -257,7 +253,7 @@ export class UsersService {
             FROM transactions t
             INNER JOIN submissions s ON t.submission_id = s.submission_id
             INNER JOIN playlists p ON s.playlist_id = p.playlist_id
-            WHERE s.artist_id = ${artistId}
+            WHERE s.artist_id = ${artistId}::uuid
                 AND t.status = 'succeeded'
                 AND p.genre IS NOT NULL
             GROUP BY p.genre
@@ -309,9 +305,7 @@ export class UsersService {
             _sum: {
                 track_count: true
             }
-        });
-
-        // Get earnings over time (monthly)
+        });        // Get earnings over time (monthly)
         const earningsOverTime = await this.prismaService.$queryRaw`
             SELECT 
                 DATE_TRUNC('month', t.created_at) as month,
@@ -319,7 +313,7 @@ export class UsersService {
             FROM transactions t
             INNER JOIN submissions s ON t.submission_id = s.submission_id
             INNER JOIN playlists p ON s.playlist_id = p.playlist_id
-            WHERE p.creator_id = ${playlistMakerId}
+            WHERE p.creator_id = ${playlistMakerId}::uuid
                 AND t.status = 'succeeded'
             GROUP BY DATE_TRUNC('month', t.created_at)
             ORDER BY month DESC
