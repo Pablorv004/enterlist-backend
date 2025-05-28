@@ -154,7 +154,14 @@ export class PaypalAuthService {
             user_id: profile.user_id.split('/').pop() || profile.user_id // Extract clean user ID
         };
 
-        // Check if user already has a PayPal payment method
+        // Calculate token expiration time (PayPal tokens typically expire in 8 hours/28800 seconds)
+        const tokenExpiresAt = new Date();
+        if (tokenData.expires_in) {
+            tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);
+        } else {
+            // Default to 8 hours if expires_in is not provided
+            tokenExpiresAt.setHours(tokenExpiresAt.getHours() + 8);
+        }        // Check if user already has a PayPal payment method
         const existingPaymentMethod = await this.prismaService.paymentMethod.findFirst({
             where: {
                 user_id: userId,
@@ -162,13 +169,16 @@ export class PaypalAuthService {
             },
         });
 
-        if (!existingPaymentMethod) {            // Create a new payment method
+        if (!existingPaymentMethod) {
+            // Create a new payment method
             await this.prismaService.paymentMethod.create({
                 data: {
                     payment_method_id: uuidv4(),
                     user_id: userId,
                     type: 'paypal',
                     provider_token: tokenData.access_token,
+                    refresh_token: tokenData.refresh_token,
+                    token_expires_at: tokenExpiresAt,
                     details: JSON.stringify(paymentMethodDetails),
                     is_default: true, // Make it default if it's the first payment method
                     created_at: new Date(),
@@ -181,6 +191,8 @@ export class PaypalAuthService {
                 where: { payment_method_id: existingPaymentMethod.payment_method_id },
                 data: {
                     provider_token: tokenData.access_token,
+                    refresh_token: tokenData.refresh_token,
+                    token_expires_at: tokenExpiresAt,
                     details: JSON.stringify(paymentMethodDetails),
                     updated_at: new Date(),
                 },
@@ -462,9 +474,10 @@ export class PaypalAuthService {
             return details.email;
         } catch (error) {
             // If details parsing fails, try to get from PayPal API using stored token
-            if (paymentMethod.provider_token) {
+            const validToken = await this.getValidUserAccessToken(userId);
+            if (validToken) {
                 try {
-                    const profile = await this.getPayPalUserProfile(paymentMethod.provider_token);
+                    const profile = await this.getPayPalUserProfile(validToken);
                     return profile.email;
                 } catch (tokenError) {
                     this.logger.error('Failed to get PayPal email from token:', tokenError);
@@ -476,7 +489,63 @@ export class PaypalAuthService {
         }
     }
 
-    private async refreshAccessToken(refreshToken: string): Promise<any> {
+    // Get a valid access token for a user, refreshing if necessary
+    async getValidUserAccessToken(userId: string): Promise<string | null> {
+        const paymentMethod = await this.prismaService.paymentMethod.findFirst({
+            where: {
+                user_id: userId,
+                type: 'paypal',
+            },
+        });
+
+        if (!paymentMethod || !paymentMethod.provider_token) {
+            return null;
+        }
+
+        // Check if token is expired
+        const now = new Date();
+        const tokenExpiresAt = paymentMethod.token_expires_at;
+
+        if (!tokenExpiresAt || now >= tokenExpiresAt) {
+            // Token is expired, try to refresh
+            if (paymentMethod.refresh_token) {
+                try {
+                    const refreshedTokens = await this.refreshAccessToken(paymentMethod.refresh_token);
+                    
+                    // Calculate new expiration time
+                    const newExpiresAt = new Date();
+                    if (refreshedTokens.expires_in) {
+                        newExpiresAt.setSeconds(newExpiresAt.getSeconds() + refreshedTokens.expires_in);
+                    } else {
+                        newExpiresAt.setHours(newExpiresAt.getHours() + 8);
+                    }
+
+                    // Update payment method with new tokens
+                    await this.prismaService.paymentMethod.update({
+                        where: { payment_method_id: paymentMethod.payment_method_id },
+                        data: {
+                            provider_token: refreshedTokens.access_token,
+                            refresh_token: refreshedTokens.refresh_token || paymentMethod.refresh_token,
+                            token_expires_at: newExpiresAt,
+                            updated_at: new Date(),
+                        },
+                    });
+
+                    this.logger.log(`Successfully refreshed PayPal access token for user ${userId}`);
+                    return refreshedTokens.access_token;
+                } catch (error) {
+                    this.logger.error('Failed to refresh PayPal token for user:', error);
+                    return null;
+                }
+            } else {
+                this.logger.warn(`No refresh token available for user ${userId}`);
+                return null;
+            }
+        }
+
+        // Token is still valid
+        return paymentMethod.provider_token;
+    }    private async refreshAccessToken(refreshToken: string): Promise<any> {
         try {
             const tokenUrl = `${this.baseUrl}/v1/oauth2/token`;
             
@@ -494,6 +563,7 @@ export class PaypalAuthService {
                 },
             });
 
+            this.logger.log('Successfully refreshed PayPal access token');
             return response.data;
         } catch (error) {
             this.logger.error('PayPal token refresh failed:', error.response?.data || error.message);

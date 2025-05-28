@@ -129,6 +129,8 @@ model PaymentMethod {
   user_id           String              @db.Uuid
   type              payment_method_type
   provider_token    String              @db.VarChar
+  refresh_token     String?             @db.VarChar
+  token_expires_at  DateTime?           @db.Timestamptz(6)
   details           String              @db.VarChar
   is_default        Boolean?            @default(false)
   created_at        DateTime            @db.Timestamptz(6)
