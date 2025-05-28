@@ -314,7 +314,7 @@ export class TransactionsService {
                 },
             },
         });
-    }    async getPlaylistMakerBalance(userId: string) {
+    } async getPlaylistMakerBalance(userId: string) {
         // Get user's current balance from the balance column
         const user = await this.prismaService.user.findUnique({
             where: { user_id: userId },
@@ -444,47 +444,22 @@ export class TransactionsService {
 
         if (!submission) {
             throw new NotFoundException('Submission not found');
-        }
-
-        // Get payment method
+        }        // Get payment method
         const paymentMethod = await this.prismaService.paymentMethod.findUnique({
             where: { payment_method_id: paymentMethodId },
-        });        if (!paymentMethod) {
+        }); if (!paymentMethod) {
             throw new NotFoundException('Payment method not found');
         }
 
-        // Get playlist maker's PayPal payment method
-        const playlistMakerPayPal = await this.prismaService.paymentMethod.findFirst({
-            where: {
-                user_id: submission.playlist.creator_id,
-                type: 'paypal',
-            },
-        });
-
-        if (!playlistMakerPayPal) {
-            throw new BadRequestException('Playlist maker has not linked their PayPal account');
-        }
-
-        // Calculate fees
+        // Calculate fees - all payments go to Enterlist first (enterlist@business.com)
+        // Later, playlist makers can withdraw their portion of the earnings
         const submissionFeeAmount = Math.round(Number(submission.playlist.submission_fee) * 100); // Convert to cents
         const platformFee = Math.round(submissionFeeAmount * 0.05); // 5% platform fee
         const creatorPayout = submissionFeeAmount - platformFee;
 
-        // Get playlist maker's PayPal email from their payment method details
-        let playlistMakerEmail: string;
-        try {
-            const details = typeof playlistMakerPayPal.details === 'string' 
-                ? JSON.parse(playlistMakerPayPal.details) 
-                : playlistMakerPayPal.details;
-            playlistMakerEmail = details.email || details.user_id;
-        } catch {
-            // If details is not JSON, assume it's the email directly
-            playlistMakerEmail = playlistMakerPayPal.details;
-        }
-
         // Create PayPal payment
         const paymentDescription = `Song submission: "${submission.song.title}" to playlist "${submission.playlist.name}"`;
-          const paypalPayment = await this.paypalAuthService.createPayment(
+        const paypalPayment = await this.paypalAuthService.createPayment(
             submissionFeeAmount,
             'USD',
             paymentDescription,
@@ -553,7 +528,7 @@ export class TransactionsService {
 
         if (!transaction) {
             throw new NotFoundException('Transaction not found');
-        }        const updatedTransaction = await this.prismaService.transaction.update({
+        } const updatedTransaction = await this.prismaService.transaction.update({
             where: {
                 transaction_id: transaction.transaction_id,
             },
@@ -608,17 +583,17 @@ export class TransactionsService {
         }
 
         return updatedTransaction;
-    }    async withdrawFunds(userId: string, amount: number) {
+    } async withdrawFunds(userId: string, amount: number) {
         // Get playlist maker's current balance
         const balance = await this.getPlaylistMakerBalance(userId);
-        
+
         if (balance.available < amount) {
             throw new BadRequestException('Insufficient available balance for withdrawal');
         }
 
         // Get user's PayPal email from linked account
         const userPayPalEmail = await this.paypalAuthService.getUserPayPalEmail(userId);
-        
+
         // Create withdrawal record first
         const withdrawal = await this.prismaService.withdrawal.create({
             data: {
