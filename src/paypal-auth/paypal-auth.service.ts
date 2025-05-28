@@ -60,7 +60,6 @@ export class PaypalAuthService {
             'openid',
             'profile',
             'email',
-            'https://uri.paypal.com/services/identity/activities'
         ].join(' ');
 
         const authUrl = new URL('https://www.paypal.com/signin/authorize');
