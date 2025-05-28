@@ -143,13 +143,15 @@ export class PaypalAuthService {
             userId = registerResult.user.id;
         }        if (!userId) {
             throw new UnauthorizedException('User ID not found');
-        }
-
-        // Create a payment method for the linked PayPal account
+        }        // Create a payment method for the linked PayPal account
+        // Extract clean email and name from PayPal profile
+        const cleanEmail = profile.email || `${profile.user_id.split('/').pop()}@paypal.user`;
+        const cleanName = profile.name || profile.given_name || profile.family_name || 'PayPal Account';
+        
         const paymentMethodDetails = {
-            email: profile.email || `${profile.user_id}@paypal.user`,
-            name: profile.name || 'PayPal Account',
-            user_id: profile.user_id
+            email: cleanEmail,
+            name: cleanName,
+            user_id: profile.user_id.split('/').pop() || profile.user_id // Extract clean user ID
         };
 
         // Check if user already has a PayPal payment method

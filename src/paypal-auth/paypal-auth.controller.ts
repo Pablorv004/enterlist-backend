@@ -49,15 +49,18 @@ export class PaypalAuthController {
                     <head>
                         <title>PayPal Authentication</title>
                     </head>
-                    <body>
-                        <script>
+                    <body>                        <script>
                             if (window.opener) {
                                 window.opener.postMessage({
                                     type: 'PAYPAL_OAUTH_ERROR',
                                     error: '${error.replace(/'/g, "\\'")}',
                                     provider: 'paypal'
                                 }, '${frontendUrl}');
-                                window.close();
+                                
+                                // Give time for the message to be received, then close
+                                setTimeout(() => {
+                                    window.close();
+                                }, 500);
                             } else {
                                 window.location.href = '${frontendUrl}/login?error=${encodeURIComponent(error)}';
                             }
@@ -103,8 +106,7 @@ export class PaypalAuthController {
                         <div style="text-align: center; padding: 20px; font-family: Arial, sans-serif;">
                             <h2>✓ PayPal Account Connected Successfully</h2>
                             <p>Closing window...</p>
-                        </div>
-                        <script>
+                        </div>                        <script>
                             if (window.opener) {
                                 window.opener.postMessage({
                                     type: 'PAYPAL_OAUTH_SUCCESS',
@@ -112,7 +114,11 @@ export class PaypalAuthController {
                                     provider: 'paypal',
                                     linkedAccount: ${result.linkedAccount || false}
                                 }, '${frontendUrl}');
-                                window.close();
+                                
+                                // Give time for the message to be received, then close
+                                setTimeout(() => {
+                                    window.close();
+                                }, 500);
                             } else {
                                 // Fallback if not in popup
                                 window.location.href = '${frontendUrl}/payment-methods?success=paypal-connected';
@@ -160,15 +166,18 @@ export class PaypalAuthController {
                     <head>
                         <title>PayPal Authentication Error</title>
                     </head>
-                    <body>
-                        <script>
+                    <body>                        <script>
                             if (window.opener) {
                                 window.opener.postMessage({
                                     type: 'PAYPAL_OAUTH_ERROR',
                                     error: '${err.message.replace(/'/g, "\\'")}',
                                     provider: 'paypal'
                                 }, '${frontendUrl}');
-                                window.close();
+                                
+                                // Give time for the message to be received, then close
+                                setTimeout(() => {
+                                    window.close();
+                                }, 500);
                             } else {
                                 window.location.href = '${frontendUrl}/login?error=${encodeURIComponent(err.message)}';
                             }
