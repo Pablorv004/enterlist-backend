@@ -14,7 +14,7 @@ export class PaypalAuthService {
     private readonly redirectUri: string;
     private readonly environment: string;
     private readonly baseUrl: string;
-    private readonly stateMap = new Map<string, { userId?: string; expiresAt: Date; isNewUser?: boolean }>();
+    private readonly stateMap = new Map<string, { userId?: string; expiresAt: Date; isNewUser?: boolean; isPopup?: boolean }>();
     private readonly logger = new Logger(PaypalAuthService.name);    constructor(
         private readonly configService: ConfigService,
         private readonly httpService: HttpService,
@@ -37,17 +37,17 @@ export class PaypalAuthService {
         }
     }
 
-    async getAuthorizationUrl(userId?: string): Promise<string> {
+    async getAuthorizationUrl(userId?: string, isPopup?: boolean): Promise<string> {
         const state = crypto.randomBytes(32).toString('hex');
         
         // Store state with expiration (15 minutes)
         const expiresAt = new Date();
         expiresAt.setMinutes(expiresAt.getMinutes() + 15);
-        
-        this.stateMap.set(state, {
+          this.stateMap.set(state, {
             userId,
             expiresAt,
             isNewUser: !userId, // If no userId provided, this is a new user registration
+            isPopup,
         });
 
         // Clean up expired states
@@ -62,12 +62,16 @@ export class PaypalAuthService {
             ? 'https://www.paypal.com/signin/authorize'
             : 'https://www.sandbox.paypal.com/signin/authorize';
             
-        const authUrl = new URL(authBaseUrl);
-        authUrl.searchParams.set('client_id', this.clientId);
+        const authUrl = new URL(authBaseUrl);        authUrl.searchParams.set('client_id', this.clientId);
         authUrl.searchParams.set('response_type', 'code');
         authUrl.searchParams.set('scope', scopes);
         authUrl.searchParams.set('redirect_uri', this.redirectUri);
         authUrl.searchParams.set('state', state);
+        
+        // Add popup parameter to redirect_uri if needed
+        if (isPopup) {
+            authUrl.searchParams.set('popup', 'true');
+        }
 
         this.logger.log(`Generated PayPal OAuth URL: ${authUrl.toString()}`);
         this.logger.log(`Redirect URI: ${this.redirectUri}`);
