@@ -16,6 +16,7 @@ model User {
   oauth_id            String?         @db.VarChar
   role                user_role?
   is_active           Boolean?        @default(true)
+  balance             Decimal         @default(0) @db.Decimal(10, 2)
   created_at          DateTime        @db.Timestamptz(6)
   updated_at          DateTime        @db.Timestamptz(6)
   admin_actions       AdminAction[]   @relation("AdminUserActions")
@@ -25,6 +26,7 @@ model User {
   playlists           Playlist[]
   songs               Song[]
   submissions         Submission[]    @relation("ArtistSubmissions")
+  withdrawals         Withdrawal[]
 
   @@map("users")
 }
@@ -172,6 +174,25 @@ model AdminAction {
   @@map("admin_actions")
 }
 
+model Withdrawal {
+  withdrawal_id         String            @id @db.Uuid
+  user_id              String            @db.Uuid
+  amount               Decimal           @db.Decimal(10, 2)
+  currency             String            @db.VarChar(3)
+  status               withdrawal_status @default(pending)
+  paypal_payout_id     String?           @db.VarChar
+  paypal_batch_id      String?           @db.VarChar
+  payout_response      String?           @db.Text
+  error_message        String?           @db.Text
+  requested_at         DateTime          @default(now()) @db.Timestamptz(6)
+  processed_at         DateTime?         @db.Timestamptz(6)
+  created_at           DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime          @updatedAt @db.Timestamptz(6)
+  user                 User              @relation(fields: [user_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("withdrawals")
+}
+
 enum payment_method_type {
   paypal
 }
@@ -193,4 +214,11 @@ enum user_role {
   playlist_maker
   artist
   admin
+}
+
+enum withdrawal_status {
+  pending
+  processing
+  completed
+  failed
 }

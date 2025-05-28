@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionDto, UpdateTransactionDto } from './dto/transaction.dto';
 import { PaypalAuthService } from '../paypal-auth/paypal-auth.service';
 import { v4 as uuidv4 } from 'uuid';
-import { transaction_status, submission_status } from '@prisma/client';
+import { transaction_status, submission_status, withdrawal_status } from '@prisma/client';
 
 @Injectable()
 export class TransactionsService {
@@ -314,10 +314,19 @@ export class TransactionsService {
                 },
             },
         });
-    }
+    }    async getPlaylistMakerBalance(userId: string) {
+        // Get user's current balance from the balance column
+        const user = await this.prismaService.user.findUnique({
+            where: { user_id: userId },
+            select: { balance: true }
+        });
 
-    async getPlaylistMakerBalance(userId: string) {
-        const result = await this.prismaService.transaction.aggregate({
+        if (!user) {
+            throw new NotFoundException('User not found');
+        }
+
+        // Get total earnings from successful transactions
+        const earningsResult = await this.prismaService.transaction.aggregate({
             where: {
                 submission: {
                     playlist: {
@@ -334,35 +343,32 @@ export class TransactionsService {
             },
         });
 
-        const totalEarnings = result._sum.creator_payout_amount || 0;
-        const totalTransactions = result._count.transaction_id || 0;
+        const totalEarnings = earningsResult._sum.creator_payout_amount || 0;
+        const totalTransactions = earningsResult._count.transaction_id || 0;
 
-        // Get pending earnings (transactions that haven't been paid out yet)
-        const pendingResult = await this.prismaService.transaction.aggregate({
+        // Get pending withdrawals
+        const pendingWithdrawals = await this.prismaService.withdrawal.aggregate({
             where: {
-                submission: {
-                    playlist: {
-                        creator_id: userId,
-                    },
-                },
-                status: transaction_status.processing,
+                user_id: userId,
+                status: {
+                    in: ['pending', 'processing']
+                }
             },
             _sum: {
-                creator_payout_amount: true,
+                amount: true,
             },
         });
 
-        const pendingEarnings = pendingResult._sum.creator_payout_amount || 0;
+        const pendingWithdrawalAmount = pendingWithdrawals._sum.amount || 0;
+        const availableBalance = Number(user.balance) - Number(pendingWithdrawalAmount);
 
         return {
             total: Number(totalEarnings),
-            available: Number(totalEarnings) - Number(pendingEarnings),
-            pending: Number(pendingEarnings),
+            available: Math.max(0, availableBalance), // Ensure non-negative
             totalEarnings: Number(totalEarnings),
-            pendingEarnings: Number(pendingEarnings),
-            availableBalance: Number(totalEarnings) - Number(pendingEarnings),
+            availableBalance: Math.max(0, availableBalance),
             totalTransactions,
-            currency: 'USD', // Default currency
+            currency: 'USD',
         };
     }
 
@@ -550,9 +556,7 @@ export class TransactionsService {
 
         if (!transaction) {
             throw new NotFoundException('Transaction not found');
-        }
-
-        const updatedTransaction = await this.prismaService.transaction.update({
+        }        const updatedTransaction = await this.prismaService.transaction.update({
             where: {
                 transaction_id: transaction.transaction_id,
             },
@@ -571,6 +575,7 @@ export class TransactionsService {
                         playlist: {
                             select: {
                                 name: true,
+                                creator_id: true,
                             },
                         },
                         song: {
@@ -581,9 +586,7 @@ export class TransactionsService {
                     },
                 },
             },
-        });
-
-        // Update submission status if payment is successful
+        });// Update submission status if payment is successful
         if (executedPayment.state === 'approved') {
             await this.prismaService.submission.update({
                 where: {
@@ -593,12 +596,22 @@ export class TransactionsService {
                     status: submission_status.pending, // Set to pending for review
                 },
             });
+
+            // Add creator payout amount to playlist maker's balance
+            await this.prismaService.user.update({
+                where: {
+                    user_id: updatedTransaction.submission.playlist.creator_id
+                },
+                data: {
+                    balance: {
+                        increment: updatedTransaction.creator_payout_amount
+                    }
+                }
+            });
         }
 
         return updatedTransaction;
-    }
-
-    async withdrawFunds(userId: string, amount: number) {
+    }    async withdrawFunds(userId: string, amount: number) {
         // Get playlist maker's current balance
         const balance = await this.getPlaylistMakerBalance(userId);
         
@@ -609,23 +622,87 @@ export class TransactionsService {
         // Get user's PayPal email from linked account
         const userPayPalEmail = await this.paypalAuthService.getUserPayPalEmail(userId);
         
-        // Create PayPal payout
-        const payout = await this.paypalAuthService.createPayout(
-            userPayPalEmail,
-            Math.round(amount * 100), // Convert to cents
-            'USD',
-            `Enterlist balance withdrawal for ${amount} USD`
-        );
+        // Create withdrawal record first
+        const withdrawal = await this.prismaService.withdrawal.create({
+            data: {
+                withdrawal_id: uuidv4(),
+                user_id: userId,
+                amount: amount,
+                currency: 'USD',
+                status: 'pending' as any, // TypeScript workaround for enum
+                requested_at: new Date(),
+                created_at: new Date(),
+                updated_at: new Date(),
+            },
+        });
 
-        // Note: In a real application, you might want to create a withdrawal transaction record
-        // to track the payout status and link it to the user's balance
-        
-        return {
-            success: true,
-            payout,
-            message: `Withdrawal of $${amount} initiated successfully`,
-            payoutBatchId: payout.batch_header.payout_batch_id
-        };
+        try {
+            // Create PayPal payout
+            const payout = await this.paypalAuthService.createPayout(
+                userPayPalEmail,
+                Math.round(amount * 100), // Convert to cents
+                'USD',
+                `Enterlist balance withdrawal for ${amount} USD`
+            );
+
+            // Update withdrawal record with PayPal details
+            await this.prismaService.withdrawal.update({
+                where: { withdrawal_id: withdrawal.withdrawal_id },
+                data: {
+                    status: 'processing' as any,
+                    paypal_batch_id: payout.batch_header.payout_batch_id,
+                    payout_response: JSON.stringify(payout),
+                    updated_at: new Date(),
+                },
+            });
+
+            // Deduct amount from user's balance
+            await this.prismaService.user.update({
+                where: { user_id: userId },
+                data: {
+                    balance: {
+                        decrement: amount
+                    }
+                }
+            });
+
+            return {
+                success: true,
+                withdrawal,
+                payout,
+                message: `Withdrawal of $${amount} initiated successfully`,
+                payoutBatchId: payout.batch_header.payout_batch_id
+            };
+
+        } catch (error) {
+            // If PayPal payout fails, mark withdrawal as failed
+            await this.prismaService.withdrawal.update({
+                where: { withdrawal_id: withdrawal.withdrawal_id },
+                data: {
+                    status: 'failed' as any,
+                    error_message: error.message,
+                    updated_at: new Date(),
+                },
+            });
+
+            throw new BadRequestException(`Withdrawal failed: ${error.message}`);
+        }
+    }
+
+    async getWithdrawals(userId: string, skip = 0, take = 10) {
+        const [data, total] = await Promise.all([
+            this.prismaService.withdrawal.findMany({
+                where: { user_id: userId },
+                skip,
+                take,
+                orderBy: { created_at: 'desc' },
+            }),
+            this.prismaService.withdrawal.count({
+                where: { user_id: userId },
+            }),
+        ]);
+
+        return { data, total, skip, take };
     }
 }
 

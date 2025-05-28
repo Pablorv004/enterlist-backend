@@ -104,6 +104,17 @@ export class TransactionsController {
         return this.transactionsService.withdrawFunds(req.user.user_id, body.amount);
     }
 
+    @UseGuards(RoleRequiredGuard)
+    @Roles(user_role.playlist_maker)
+    @Get('playlist-maker/withdrawals')
+    getWithdrawals(
+        @Req() req,
+        @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
+        @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
+    ) {
+        return this.transactionsService.getWithdrawals(req.user.user_id, skip, take);
+    }
+
     // PayPal payment endpoints
     @UseGuards(RoleRequiredGuard)
     @Roles(user_role.artist)
