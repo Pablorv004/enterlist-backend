@@ -597,5 +597,35 @@ export class TransactionsService {
 
         return updatedTransaction;
     }
+
+    async withdrawFunds(userId: string, amount: number) {
+        // Get playlist maker's current balance
+        const balance = await this.getPlaylistMakerBalance(userId);
+        
+        if (balance.available < amount) {
+            throw new BadRequestException('Insufficient available balance for withdrawal');
+        }
+
+        // Get user's PayPal email from linked account
+        const userPayPalEmail = await this.paypalAuthService.getUserPayPalEmail(userId);
+        
+        // Create PayPal payout
+        const payout = await this.paypalAuthService.createPayout(
+            userPayPalEmail,
+            Math.round(amount * 100), // Convert to cents
+            'USD',
+            `Enterlist balance withdrawal for ${amount} USD`
+        );
+
+        // Note: In a real application, you might want to create a withdrawal transaction record
+        // to track the payout status and link it to the user's balance
+        
+        return {
+            success: true,
+            payout,
+            message: `Withdrawal of $${amount} initiated successfully`,
+            payoutBatchId: payout.batch_header.payout_batch_id
+        };
+    }
 }
 

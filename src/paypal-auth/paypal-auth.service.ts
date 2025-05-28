@@ -24,8 +24,7 @@ export class PaypalAuthService {
         private readonly linkedAccountsService: LinkedAccountsService,
         private readonly prismaService: PrismaService,
         private readonly authService: AuthService,
-    ) {
-        this.clientId = this.configService.get<string>('PAYPAL_CLIENT_ID') || '';
+    ) {        this.clientId = this.configService.get<string>('PAYPAL_CLIENT_ID') || '';
         this.clientSecret = this.configService.get<string>('PAYPAL_CLIENT_SECRET') || '';
         this.environment = this.configService.get<string>('PAYPAL_MODE', 'sandbox');
         this.baseUrl = this.environment === 'live' 
@@ -37,6 +36,8 @@ export class PaypalAuthService {
             this.logger.warn('PayPal OAuth client ID or secret is missing');
         } else {
             this.logger.log(`PayPal OAuth service initialized in ${this.environment} mode`);
+            this.logger.log(`PayPal Client ID: ${this.clientId}`);
+            this.logger.log(`PayPal Redirect URI: ${this.redirectUri}`);
         }
     }
 
@@ -54,20 +55,26 @@ export class PaypalAuthService {
         });
 
         // Clean up expired states
-        this.cleanupExpiredStates();
-
-        const scopes = [
+        this.cleanupExpiredStates();        const scopes = [
             'openid',
             'profile',
             'email',
         ].join(' ');
 
-        const authUrl = new URL('https://www.paypal.com/signin/authorize');
+        // Use the correct PayPal OAuth authorization URL based on environment
+        const authBaseUrl = this.environment === 'live' 
+            ? 'https://www.paypal.com/signin/authorize'
+            : 'https://www.sandbox.paypal.com/signin/authorize';
+            
+        const authUrl = new URL(authBaseUrl);
         authUrl.searchParams.set('client_id', this.clientId);
         authUrl.searchParams.set('response_type', 'code');
         authUrl.searchParams.set('scope', scopes);
         authUrl.searchParams.set('redirect_uri', this.redirectUri);
         authUrl.searchParams.set('state', state);
+
+        this.logger.log(`Generated PayPal OAuth URL: ${authUrl.toString()}`);
+        this.logger.log(`Redirect URI: ${this.redirectUri}`);
 
         this.logger.log(`Generated PayPal OAuth URL for ${userId ? 'existing user' : 'new user'}`);
         return authUrl.toString();

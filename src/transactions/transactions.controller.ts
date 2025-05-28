@@ -92,7 +92,19 @@ export class TransactionsController {
         @Query('period') period: 'week' | 'month' | 'year' = 'week',
     ) {
         return this.transactionsService.getEarningsStats(req.user.user_id, period);
-    }// PayPal payment endpoints
+    }
+
+    @UseGuards(RoleRequiredGuard)
+    @Roles(user_role.playlist_maker)
+    @Post('playlist-maker/withdraw')
+    withdrawFunds(
+        @Req() req,
+        @Body() body: { amount: number },
+    ) {
+        return this.transactionsService.withdrawFunds(req.user.user_id, body.amount);
+    }
+
+    // PayPal payment endpoints
     @UseGuards(RoleRequiredGuard)
     @Roles(user_role.artist)
     @Post('paypal/create-payment')

@@ -147,4 +147,14 @@ export class PaypalAuthController {
             createPayoutDto.note
         );
     }
+
+    @Get('debug-config')
+    async debugConfig() {
+        return {
+            environment: this.paypalAuthService['environment'],
+            clientId: this.paypalAuthService['clientId'],
+            redirectUri: this.paypalAuthService['redirectUri'],
+            baseUrl: this.paypalAuthService['baseUrl']
+        };
+    }
 }
