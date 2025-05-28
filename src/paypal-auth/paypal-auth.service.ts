@@ -487,9 +487,7 @@ export class PaypalAuthService {
                 throw new UnauthorizedException('PayPal account needs to be re-linked');
             }
         }
-    }
-
-    // Get a valid access token for a user, refreshing if necessary
+    }    // Get a valid access token for a user, refreshing if necessary
     async getValidUserAccessToken(userId: string): Promise<string | null> {
         const paymentMethod = await this.prismaService.paymentMethod.findFirst({
             where: {
@@ -499,6 +497,7 @@ export class PaypalAuthService {
         });
 
         if (!paymentMethod || !paymentMethod.provider_token) {
+            this.logger.warn(`No PayPal payment method found for user ${userId}`);
             return null;
         }
 
@@ -507,6 +506,7 @@ export class PaypalAuthService {
         const tokenExpiresAt = paymentMethod.token_expires_at;
 
         if (!tokenExpiresAt || now >= tokenExpiresAt) {
+            this.logger.log(`PayPal token expired for user ${userId}, attempting to refresh`);
             // Token is expired, try to refresh
             if (paymentMethod.refresh_token) {
                 try {
@@ -531,22 +531,24 @@ export class PaypalAuthService {
                         },
                     });
 
-                    this.logger.log(`Successfully refreshed PayPal access token for user ${userId}`);
+                    this.logger.log(`Successfully refreshed PayPal access token for user ${userId}, expires at ${newExpiresAt.toISOString()}`);
                     return refreshedTokens.access_token;
                 } catch (error) {
-                    this.logger.error('Failed to refresh PayPal token for user:', error);
+                    this.logger.error(`Failed to refresh PayPal token for user ${userId}:`, error);
                     return null;
                 }
             } else {
-                this.logger.warn(`No refresh token available for user ${userId}`);
+                this.logger.warn(`No refresh token available for user ${userId}, re-authentication required`);
                 return null;
             }
         }
 
         // Token is still valid
+        this.logger.log(`Using existing valid PayPal token for user ${userId}, expires at ${tokenExpiresAt.toISOString()}`);
         return paymentMethod.provider_token;
-    }    private async refreshAccessToken(refreshToken: string): Promise<any> {
+    }private async refreshAccessToken(refreshToken: string): Promise<any> {
         try {
+            this.logger.log('Attempting to refresh PayPal access token');
             const tokenUrl = `${this.baseUrl}/v1/oauth2/token`;
             
             const data = new URLSearchParams({
@@ -564,9 +566,13 @@ export class PaypalAuthService {
             });
 
             this.logger.log('Successfully refreshed PayPal access token');
+            if (response.data.expires_in) {
+                this.logger.log(`New token expires in ${response.data.expires_in} seconds`);
+            }
             return response.data;
         } catch (error) {
             this.logger.error('PayPal token refresh failed:', error.response?.data || error.message);
+            this.logger.error('Will need to re-authenticate with PayPal');
             throw new UnauthorizedException('Failed to refresh PayPal access token');
         }
     }
