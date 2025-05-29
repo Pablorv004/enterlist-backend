@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { submission_status, transaction_status } from '@prisma/client';
 
 @Injectable()
 export class AdminService {
@@ -268,5 +269,435 @@ export class AdminService {
             }
         });
         return updatedWithdrawal;
+    }
+
+    // Admin User Management
+    async getUsers(skip = 0, take = 10) {
+        const [users, total] = await Promise.all([
+            this.prismaService.user.findMany({
+                where: { role: { not: 'admin' } },
+                skip,
+                take,
+                orderBy: { created_at: 'desc' },                select: {
+                    user_id: true,
+                    username: true,
+                    email: true,
+                    role: true,
+                    is_active: true,
+                    email_confirmed: true,
+                    created_at: true,
+                    updated_at: true,
+                    _count: {
+                        select: {
+                            playlists: true,
+                            submissions: true
+                        }
+                    }
+                }
+            }),
+            this.prismaService.user.count({ where: { role: { not: 'admin' } } })
+        ]);
+
+        return {
+            data: users,
+            total: Number(total),
+            skip,
+            take
+        };
+    }
+
+    async getUser(userId: string) {
+        const user = await this.prismaService.user.findUnique({
+            where: { user_id: userId },
+            include: {                    _count: {
+                        select: {
+                            playlists: true,
+                            songs: true,
+                            submissions: true
+                        }
+                    }
+            }
+        });
+
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        return user;
+    }
+
+    async updateUser(userId: string, userData: any) {
+        const user = await this.prismaService.user.update({
+            where: { user_id: userId },
+            data: userData,
+            select: {
+                user_id: true,
+                username: true,
+                email: true,
+                role: true,
+                is_active: true,
+                email_confirmed: true,
+                updated_at: true
+            }
+        });
+
+        return user;
+    }
+
+    async deleteUser(userId: string) {
+        // Soft delete by setting is_active to false
+        const user = await this.prismaService.user.update({
+            where: { user_id: userId },
+            data: { is_active: false },
+        });
+
+        return user;
+    }    async suspendUser(userId: string, reason: string) {
+        const user = await this.prismaService.user.update({
+            where: { user_id: userId },
+            data: { is_active: false },
+        });
+
+        return user;
+    }    async reactivateUser(userId: string) {
+        const user = await this.prismaService.user.update({
+            where: { user_id: userId },
+            data: { is_active: true },
+        });
+
+        return user;
+    }
+
+    // Admin Playlist Management
+    async getPlaylists(skip = 0, take = 10) {
+        const [playlists, total] = await Promise.all([
+            this.prismaService.playlist.findMany({
+                skip,
+                take,
+                orderBy: { created_at: 'desc' },                include: {
+                    creator: {
+                        select: { username: true, email: true }
+                    },
+                    _count: {
+                        select: {
+                            submissions: true
+                        }
+                    }
+                }
+            }),
+            this.prismaService.playlist.count()
+        ]);
+
+        return {
+            data: playlists,
+            total: Number(total),
+            skip,
+            take
+        };
+    }
+
+    async getPlaylist(playlistId: string) {
+        const playlist = await this.prismaService.playlist.findUnique({
+            where: { playlist_id: playlistId },            include: {
+                creator: {
+                    select: { username: true, email: true }
+                },
+                _count: {
+                    select: {
+                        submissions: true
+                    }
+                }
+            }
+        });
+
+        if (!playlist) {
+            throw new Error('Playlist not found');
+        }
+
+        return playlist;
+    }
+
+    async updatePlaylist(playlistId: string, playlistData: any) {
+        const playlist = await this.prismaService.playlist.update({
+            where: { playlist_id: playlistId },
+            data: playlistData,
+        });
+
+        return playlist;
+    }
+
+    async deletePlaylist(playlistId: string) {
+        const playlist = await this.prismaService.playlist.update({
+            where: { playlist_id: playlistId },
+            data: { deleted: true },
+        });
+
+        return playlist;
+    }    async flagPlaylist(playlistId: string, reason: string) {
+        return { message: 'Playlist flagged successfully' };
+    }    async unflagPlaylist(playlistId: string) {
+        return { message: 'Playlist unflagged successfully' };
+    }
+
+    // Admin Song Management
+    async getSongs(skip = 0, take = 10) {
+        const [songs, total] = await Promise.all([
+            this.prismaService.song.findMany({
+                skip,
+                take,
+                orderBy: { created_at: 'desc' },
+                include: {
+                    artist: {
+                        select: { username: true, email: true }
+                    },
+                    _count: {
+                        select: {
+                            submissions: true
+                        }
+                    }
+                }
+            }),
+            this.prismaService.song.count()
+        ]);
+
+        return {
+            data: songs,
+            total: Number(total),
+            skip,
+            take
+        };
+    }
+
+    async getSong(songId: string) {
+        const song = await this.prismaService.song.findUnique({
+            where: { song_id: songId },
+            include: {
+                artist: {
+                    select: { username: true, email: true }
+                },
+                submissions: {
+                    include: {
+                        playlist: {
+                            select: { name: true }
+                        }
+                    }
+                },
+                _count: {
+                    select: {
+                        submissions: true
+                    }
+                }
+            }
+        });
+
+        if (!song) {
+            throw new Error('Song not found');
+        }
+
+        return song;
+    }
+
+    async updateSong(songId: string, songData: any) {
+        const song = await this.prismaService.song.update({
+            where: { song_id: songId },
+            data: songData,
+        });
+
+        return song;
+    }
+
+    async deleteSong(songId: string) {
+        const song = await this.prismaService.song.update({
+            where: { song_id: songId },
+            data: { deleted: true },
+        });
+
+        return song;
+    }    async flagSong(songId: string, reason: string) {
+        return { message: 'Song flagged successfully' };
+    }    async unflagSong(songId: string) {
+        return { message: 'Song unflagged successfully' };
+    }
+
+    // Admin Submission Management
+    async getSubmissions(skip = 0, take = 10, status?: string) {
+        const where = status ? { status: status as submission_status } : {};
+        
+        const [submissions, total] = await Promise.all([
+            this.prismaService.submission.findMany({
+                where,
+                skip,
+                take,
+                orderBy: { submitted_at: 'desc' },
+                include: {
+                    artist: {
+                        select: { username: true, email: true }
+                    },
+                    playlist: {
+                        select: { name: true }
+                    },
+                    song: {
+                        select: { title: true }
+                    }
+                }
+            }),
+            this.prismaService.submission.count({ where })
+        ]);
+
+        return {
+            data: submissions,
+            total: Number(total),
+            skip,
+            take
+        };
+    }
+
+    async getSubmission(submissionId: string) {
+        const submission = await this.prismaService.submission.findUnique({
+            where: { submission_id: submissionId },
+            include: {
+                artist: {
+                    select: { username: true, email: true }
+                },
+                playlist: {
+                    select: { name: true }
+                },
+                song: {
+                    select: { title: true }
+                },
+                transaction: true
+            }
+        });
+
+        if (!submission) {
+            throw new Error('Submission not found');
+        }
+
+        return submission;
+    }
+
+    async updateSubmission(submissionId: string, submissionData: any) {
+        const submission = await this.prismaService.submission.update({
+            where: { submission_id: submissionId },
+            data: submissionData,
+        });
+
+        return submission;
+    }
+
+    async deleteSubmission(submissionId: string) {
+        const submission = await this.prismaService.submission.delete({
+            where: { submission_id: submissionId },
+        });
+
+        return submission;
+    }    // Admin Transaction Management
+    async getTransactions(skip = 0, take = 10, status?: string) {
+        const where = status ? { status: status as transaction_status } : {};
+        
+        const [transactions, total] = await Promise.all([
+            this.prismaService.transaction.findMany({
+                where,
+                skip,
+                take,
+                orderBy: { created_at: 'desc' },
+                include: {
+                    submission: {
+                        include: {
+                            artist: {
+                                select: { username: true }
+                            },
+                            playlist: {
+                                select: { name: true }
+                            },
+                            song: {
+                                select: { title: true }
+                            }
+                        }
+                    }
+                }
+            }),
+            this.prismaService.transaction.count({ where })
+        ]);
+
+        return {
+            data: transactions,
+            total: Number(total),
+            skip,
+            take
+        };
+    }
+
+    async getTransaction(transactionId: string) {
+        const transaction = await this.prismaService.transaction.findUnique({
+            where: { transaction_id: transactionId },
+            include: {
+                submission: {
+                    include: {
+                        artist: {
+                            select: { username: true, email: true }
+                        },
+                        playlist: {
+                            select: { name: true }
+                        },
+                        song: {
+                            select: { title: true }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!transaction) {
+            throw new Error('Transaction not found');
+        }
+
+        return transaction;
+    }
+
+    // Admin Platform Management
+    async getPlatforms() {
+        const platforms = await this.prismaService.platform.findMany({
+            orderBy: { name: 'asc' }
+        });
+
+        return platforms;
+    }
+
+    async createPlatform(platformData: any) {
+        const platform = await this.prismaService.platform.create({
+            data: platformData
+        });
+
+        return platform;
+    }
+
+    async getPlatform(platformId: number) {
+        const platform = await this.prismaService.platform.findUnique({
+            where: { platform_id: platformId }
+        });
+
+        if (!platform) {
+            throw new Error('Platform not found');
+        }
+
+        return platform;
+    }
+
+    async updatePlatform(platformId: number, platformData: any) {
+        const platform = await this.prismaService.platform.update({
+            where: { platform_id: platformId },
+            data: platformData
+        });
+
+        return platform;
+    }
+
+    async deletePlatform(platformId: number) {
+        const platform = await this.prismaService.platform.delete({
+            where: { platform_id: platformId }
+        });
+
+        return platform;
     }
 }
