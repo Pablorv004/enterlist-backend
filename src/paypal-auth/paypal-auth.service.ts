@@ -335,6 +335,11 @@ export class PaypalAuthService {
                 }
             };
 
+            this.logger.log(`Creating PayPal payment for amount: ${(amount / 100).toFixed(2)} ${currency}`);
+            this.logger.log(`Payment description: ${description}`);
+            this.logger.log(`Return URL: ${returnUrl}`);
+            this.logger.log(`Cancel URL: ${cancelUrl}`);
+
             const response = await firstValueFrom(
                 this.httpService.post(
                     `${this.baseUrl}/v1/payments/payment`,
@@ -351,8 +356,26 @@ export class PaypalAuthService {
             this.logger.log(`PayPal payment created with ID: ${response.data.id}`);
             return response.data;
         } catch (error) {
-            this.logger.error('Failed to create PayPal payment:', error.response?.data || error.message);
-            throw new BadRequestException('Failed to create PayPal payment');
+            this.logger.error('Failed to create PayPal payment:');
+            
+            // Log detailed error information
+            if (error.response) {
+                this.logger.error(`Status code: ${error.response.status}`);
+                this.logger.error('Response data:', JSON.stringify(error.response.data));
+                this.logger.error('Response headers:', JSON.stringify(error.response.headers));
+            } else if (error.request) {
+                this.logger.error('No response received:', error.request);
+            } else {
+                this.logger.error('Error message:', error.message);
+            }
+            
+            if (error.response?.data?.name === 'DUPLICATE_TRANSACTION') {
+                throw new BadRequestException('A duplicate PayPal transaction was detected. Please try again with a different submission.');
+            } else if (error.response?.status === 429) {
+                throw new BadRequestException('Too many PayPal requests. Please wait a moment and try again.');
+            }
+            
+            throw new BadRequestException(`Failed to create PayPal payment: ${error.message}`);
         }
     }
 

@@ -444,11 +444,28 @@ export class TransactionsService {
 
         if (!submission) {
             throw new NotFoundException('Submission not found');
-        }        // Get payment method
+        }
+        
+        // Get payment method
         const paymentMethod = await this.prismaService.paymentMethod.findUnique({
             where: { payment_method_id: paymentMethodId },
-        }); if (!paymentMethod) {
+        }); 
+        
+        if (!paymentMethod) {
             throw new NotFoundException('Payment method not found');
+        }
+
+        // Check for existing transactions for this submission to prevent duplicates
+        const existingTransaction = await this.prismaService.transaction.findFirst({
+            where: { submission_id: submissionId },
+        });
+
+        if (existingTransaction) {
+            // If there's already a transaction, delete the submission and throw an error
+            await this.prismaService.submission.delete({
+                where: { submission_id: submissionId }
+            });
+            throw new ConflictException('A transaction already exists for this submission');
         }
 
         // Calculate fees - all payments go to Enterlist first (enterlist@business.com)
@@ -457,62 +474,77 @@ export class TransactionsService {
         const platformFee = Math.round(submissionFeeAmount * 0.05); // 5% platform fee
         const creatorPayout = submissionFeeAmount - platformFee;
 
-        // Create PayPal payment
-        const paymentDescription = `Song submission: "${submission.song.title}" to playlist "${submission.playlist.name}"`;
-        const paypalPayment = await this.paypalAuthService.createPayment(
-            submissionFeeAmount,
-            'USD',
-            paymentDescription,
-            returnUrl,
-            cancelUrl
-        );
+        try {
+            // Create PayPal payment
+            const paymentDescription = `Song submission: "${submission.song.title}" to playlist "${submission.playlist.name}"`;
+            const paypalPayment = await this.paypalAuthService.createPayment(
+                submissionFeeAmount,
+                'USD',
+                paymentDescription,
+                returnUrl,
+                cancelUrl
+            );
 
-        // Create transaction record
-        const transaction = await this.prismaService.transaction.create({
-            data: {
-                transaction_id: uuidv4(),
-                submission_id: submissionId,
-                payment_method_id: paymentMethodId,
-                amount_total: submissionFeeAmount / 100, // Store as decimal
-                currency: 'USD',
-                platform_fee: platformFee / 100,
-                creator_payout_amount: creatorPayout / 100,
-                status: transaction_status.pending,
-                payment_provider_transaction_id: paypalPayment.id,
-                created_at: new Date(),
-                updated_at: new Date(),
-            },
-            include: {
-                submission: {
-                    include: {
-                        artist: {
-                            select: {
-                                username: true,
+            // Create transaction record
+            const transaction = await this.prismaService.transaction.create({
+                data: {
+                    transaction_id: uuidv4(),
+                    submission_id: submissionId,
+                    payment_method_id: paymentMethodId,
+                    amount_total: submissionFeeAmount / 100, // Store as decimal
+                    currency: 'USD',
+                    platform_fee: platformFee / 100,
+                    creator_payout_amount: creatorPayout / 100,
+                    status: transaction_status.pending,
+                    payment_provider_transaction_id: paypalPayment.id,
+                    created_at: new Date(),
+                    updated_at: new Date(),
+                },
+                include: {
+                    submission: {
+                        include: {
+                            artist: {
+                                select: {
+                                    username: true,
+                                },
                             },
-                        },
-                        playlist: {
-                            select: {
-                                name: true,
+                            playlist: {
+                                select: {
+                                    name: true,
+                                },
                             },
-                        },
-                        song: {
-                            select: {
-                                title: true,
+                            song: {
+                                select: {
+                                    title: true,
+                                },
                             },
                         },
                     },
                 },
             },
-        });
+        );
 
-        // Find the approval URL from PayPal response
-        const approvalUrl = paypalPayment.links.find(link => link.rel === 'approval_url')?.href;
+            // Find the approval URL from PayPal response
+            const approvalUrl = paypalPayment.links.find(link => link.rel === 'approval_url')?.href;
 
-        return {
-            transaction,
-            paypalPayment,
-            approvalUrl,
-        };
+            return {
+                transaction,
+                paypalPayment,
+                approvalUrl,
+            };
+        } catch (error) {
+            // If PayPal payment creation fails, delete the submission
+            await this.prismaService.submission.delete({
+                where: { submission_id: submissionId }
+            });
+            
+            // Re-throw the error with more details for debugging
+            throw new BadRequestException({
+                message: 'Failed to create PayPal payment',
+                details: error.message,
+                originalError: error.response?.data || error.toString()
+            });
+        }
     }
 
     async executePayPalPayment(paymentId: string, payerId: string) {
