@@ -775,15 +775,29 @@ export class YoutubeAuthService {
                     continue;
                 }
 
-                const playlist = playlistData.items[0];
-
-                // Check if playlist already exists
+                const playlist = playlistData.items[0];                // Check if playlist already exists
                 const existingPlaylist = await this.prismaService.playlist.findFirst({
                     where: {
                         platform_id: youtubePlatform.platform_id,
                         platform_specific_id: playlistId,
                     },
+                    include: {
+                        creator: {
+                            select: {
+                                user_id: true,
+                                username: true,
+                                email: true,
+                            },
+                        },
+                    },
                 });
+
+                // If playlist exists and belongs to a different user, throw an error
+                if (existingPlaylist && existingPlaylist.creator_id !== userId) {
+                    throw new ConflictException(
+                        `Playlist "${existingPlaylist.name}" is already registered in our database by user ${existingPlaylist.creator.username} (${existingPlaylist.creator.email}). Please contact administrator help for assistance.`
+                    );
+                }
 
                 const playlistUpdateData = {
                     name: playlist.snippet.title,
