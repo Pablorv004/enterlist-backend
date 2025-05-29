@@ -30,29 +30,39 @@ export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter;
   private readonly frontendUrl: string;
-
   constructor(private configService: ConfigService) {
     this.frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
-    this.initializeTransporter();
+    
+    // Only initialize transporter if email credentials are provided
+    const emailUser = this.configService.get<string>('EMAIL_USER');
+    const emailPass = this.configService.get<string>('EMAIL_PASS');
+    
+    if (emailUser && emailPass) {
+      this.initializeTransporter();
+    } else {
+      this.logger.warn('Email credentials not provided. Email service will be disabled.');
+    }
   }
   private initializeTransporter() {
     this.transporter = nodemailer.createTransport({
       host: this.configService.get<string>('EMAIL_HOST'),
       port: this.configService.get<number>('EMAIL_PORT'),
-      secure: this.configService.get<boolean>('EMAIL_SECURE'),      auth: {
+      secure: this.configService.get<string>('EMAIL_SECURE') === 'true',      auth: {
         user: this.configService.get<string>('EMAIL_USER'),
         pass: this.configService.get<string>('EMAIL_PASS')
       },
-    });
-
-    // Verify connection
-    this.transporter.verify((error, success) => {
-      if (error) {
-        this.logger.error('Email transporter verification failed:', error);
-      } else {
-        this.logger.log('Email transporter is ready to send messages');
-      }
-    });
+    });    // Verify connection
+    try {
+      this.transporter.verify((error, success) => {
+        if (error) {
+          this.logger.error('Email transporter verification failed:', error);
+        } else {
+          this.logger.log('Email transporter is ready to send messages');
+        }
+      });
+    } catch (error) {
+      this.logger.error('Failed to verify email transporter:', error);
+    }
   }
 
   private getTemplate(templateName: string): string {
@@ -261,13 +271,17 @@ export class EmailService {
     
     return compiledTemplate(enhancedContext);
   }
-
   async sendEmail(
     to: string,
     subject: string,
     templateName: string,
     context: EmailContext
   ): Promise<boolean> {
+    if (!this.transporter) {
+      this.logger.warn('Email transporter not initialized. Cannot send email.');
+      return false;
+    }
+
     try {
       const html = this.compileTemplate(templateName, context);
       
