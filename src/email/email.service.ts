@@ -495,13 +495,12 @@ export class EmailService {
       context
     );
   }
-
   async sendEmailConfirmation(
     userEmail: string,
     userName: string,
     confirmationToken: string
   ): Promise<boolean> {
-    const confirmationUrl = `${this.frontendUrl}/confirm-email?token=${confirmationToken}`;
+    const confirmationUrl = `${this.frontendUrl}/confirm-email-token?token=${confirmationToken}`;
     
     const context: EmailContext = {
       title: 'Confirm Your Email Address',
