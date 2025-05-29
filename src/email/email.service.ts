@@ -29,8 +29,7 @@ export interface EmailContext {
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter;
-  private readonly frontendUrl: string;
-  constructor(private configService: ConfigService) {
+  private readonly frontendUrl: string;  constructor(private configService: ConfigService) {
     this.frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
     
     // Only initialize transporter if email credentials are provided
@@ -44,15 +43,18 @@ export class EmailService {
     }
   }
   private initializeTransporter() {
-    this.transporter = nodemailer.createTransport({
-      host: this.configService.get<string>('EMAIL_HOST'),
-      port: this.configService.get<number>('EMAIL_PORT'),
-      secure: this.configService.get<string>('EMAIL_SECURE') === 'true',      auth: {
-        user: this.configService.get<string>('EMAIL_USER'),
-        pass: this.configService.get<string>('EMAIL_PASS')
-      },
-    });    // Verify connection
     try {
+      this.transporter = nodemailer.createTransport({
+        host: this.configService.get<string>('EMAIL_HOST'),
+        port: this.configService.get<number>('EMAIL_PORT'),
+        secure: this.configService.get<string>('EMAIL_SECURE') === 'true',
+        auth: {
+          user: this.configService.get<string>('EMAIL_USER'),
+          pass: this.configService.get<string>('EMAIL_PASS')
+        },
+      });
+      
+      // Verify connection asynchronously
       this.transporter.verify((error, success) => {
         if (error) {
           this.logger.error('Email transporter verification failed:', error);
@@ -61,7 +63,7 @@ export class EmailService {
         }
       });
     } catch (error) {
-      this.logger.error('Failed to verify email transporter:', error);
+      this.logger.error('Failed to initialize email transporter:', error);
     }
   }
 
@@ -284,15 +286,17 @@ export class EmailService {
 
     try {
       const html = this.compileTemplate(templateName, context);
-      
-      const mailOptions = {        from: {
+        const mailOptions = {
+        from: {
           name: 'Enterlist',
           address: this.configService.get<string>('EMAIL_USER') || 'noreply@enterlist.com'
         },
         to,
         subject,
         html,
-      };      const result = await this.transporter.sendMail(mailOptions);
+      };
+      
+      const result = await this.transporter.sendMail(mailOptions);
       this.logger.log(`Email sent successfully to ${to}`, result?.messageId || 'No message ID');
       return true;
     } catch (error) {
