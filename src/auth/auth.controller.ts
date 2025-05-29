@@ -33,14 +33,4 @@ export class AuthController {
         
         return user;
     }
-
-    @Post('confirm-email')
-    async confirmEmail(@Body() body: { token: string }) {
-        return this.authService.confirmEmail(body.token);
-    }
-
-    @Post('resend-confirmation')
-    async resendConfirmation(@Body() body: { email: string }) {
-        return this.authService.resendEmailConfirmation(body.email);
-    }
 }
