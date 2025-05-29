@@ -466,16 +466,70 @@ export class TransactionsService {
                 where: { submission_id: submissionId }
             });
             throw new ConflictException('A transaction already exists for this submission');
-        }
-
-        // Calculate fees - all payments go to Enterlist first (enterlist@business.com)
+        }        // Calculate fees - all payments go to Enterlist first (enterlist@business.com)
         // Later, playlist makers can withdraw their portion of the earnings
         const submissionFeeAmount = Math.round(Number(submission.playlist.submission_fee) * 100); // Convert to cents
         const platformFee = Math.round(submissionFeeAmount * 0.05); // 5% platform fee
         const creatorPayout = submissionFeeAmount - platformFee;
 
+        // If submission fee is zero, skip PayPal and approve directly
+        if (submissionFeeAmount === 0) {
+            // Create transaction record for free submission
+            const transaction = await this.prismaService.transaction.create({
+                data: {
+                    transaction_id: uuidv4(),
+                    submission_id: submissionId,
+                    payment_method_id: paymentMethodId,
+                    amount_total: 0,
+                    currency: 'USD',
+                    platform_fee: 0,
+                    creator_payout_amount: 0,
+                    status: transaction_status.succeeded, // Mark as succeeded for free submissions
+                    payment_provider_transaction_id: `free_${Date.now()}`, // Generate a unique ID for free submissions
+                    created_at: new Date(),
+                    updated_at: new Date(),
+                },
+                include: {
+                    submission: {
+                        include: {
+                            artist: {
+                                select: {
+                                    username: true,
+                                },
+                            },
+                            playlist: {
+                                select: {
+                                    name: true,
+                                },
+                            },
+                            song: {
+                                select: {
+                                    title: true,
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+
+            // Update submission status to pending for review since payment is "complete"
+            await this.prismaService.submission.update({
+                where: { submission_id: submissionId },
+                data: { status: submission_status.pending }
+            });
+
+            // Return success response without PayPal payment
+            return {
+                transaction,
+                paypalPayment: null,
+                approvalUrl: null,
+                success: true,
+                isFreeSubmission: true
+            };
+        }
+
         try {
-            // Create PayPal payment
+            // Create PayPal payment for paid submissions
             const paymentDescription = `Song submission: "${submission.song.title}" to playlist "${submission.playlist.name}"`;
             const paypalPayment = await this.paypalAuthService.createPayment(
                 submissionFeeAmount,
