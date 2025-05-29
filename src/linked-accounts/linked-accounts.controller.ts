@@ -11,6 +11,7 @@ import {
 import { LinkedAccountsService } from './linked-accounts.service';
 import { CreateLinkedAccountDto, UpdateLinkedAccountDto } from './dto/linked-account.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { EmailConfirmedGuard } from '../auth/guards/email-confirmed.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { RoleRequiredGuard } from '../auth/guards/role-required.guard';
 import { OwnershipGuard } from '../auth/guards/ownership.guard';
@@ -20,35 +21,33 @@ import { user_role } from '@prisma/client';
 
 @Controller('api/linked-accounts')
 export class LinkedAccountsController {
-    constructor(private readonly linkedAccountsService: LinkedAccountsService) { }
-
-    @UseGuards(JwtAuthGuard, RolesGuard)
+    constructor(private readonly linkedAccountsService: LinkedAccountsService) { }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RolesGuard)
     @Roles(user_role.admin)
     @Get()
     findAll() {
         return this.linkedAccountsService.findAll();
     }    
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'user', userField: 'user_id', paramName: 'userId' })
     @Get('user/:userId')
     findByUser(@Param('userId') userId: string) {
         return this.linkedAccountsService.findByUser(userId);
     }
 
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'linkedAccount', userField: 'user_id' })
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.linkedAccountsService.findOne(id);
     }
 
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     @Post()
     create(@Body() createLinkedAccountDto: CreateLinkedAccountDto) {
         return this.linkedAccountsService.create(createLinkedAccountDto);
     }
 
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'linkedAccount', userField: 'user_id' })
     @Put(':id')
     update(
@@ -58,7 +57,7 @@ export class LinkedAccountsController {
         return this.linkedAccountsService.update(id, updateLinkedAccountDto);
     }
 
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'linkedAccount', userField: 'user_id' })
     @Delete(':id')
     remove(@Param('id') id: string) {

@@ -1,6 +1,7 @@
 import { Controller, Get, Query, Req, Res, Post, Body, UseGuards, Param, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { EmailConfirmedGuard } from '../auth/guards/email-confirmed.guard';
 import { PaypalAuthService } from './paypal-auth.service';
 import { Response } from 'express';
 
@@ -9,17 +10,13 @@ export class PaypalAuthController {
     constructor(
         private readonly paypalAuthService: PaypalAuthService,
         private readonly configService: ConfigService
-    ) { }
-
-    @Get('login')
-    @UseGuards(JwtAuthGuard)
+    ) { }    @Get('login')
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
     async login(@Req() req, @Res() res: Response) {
         const authUrl = await this.paypalAuthService.getAuthorizationUrl(req.user.user_id);
         return res.redirect(authUrl);
-    }
-
-    @Get('login-url')
-    @UseGuards(JwtAuthGuard)
+    }    @Get('login-url')
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
     async getLoginUrl(@Req() req) {
         const authUrl = await this.paypalAuthService.getAuthorizationUrl(req.user.user_id);
         return { url: authUrl };
@@ -188,10 +185,8 @@ export class PaypalAuthController {
             }
             return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(err.message)}`);
         }
-    }
-
-    @Get('user-email')
-    @UseGuards(JwtAuthGuard)
+    }    @Get('user-email')
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
     async getUserPayPalEmail(@Req() req) {
         try {
             const email = await this.paypalAuthService.getUserPayPalEmail(req.user.user_id);
@@ -199,10 +194,8 @@ export class PaypalAuthController {
         } catch (error) {
             throw new UnauthorizedException('PayPal account not linked or invalid');
         }
-    }
-
-    @Post('create-payment')
-    @UseGuards(JwtAuthGuard)
+    }    @Post('create-payment')
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
     async createPayment(@Body() createPaymentDto: {
         amount: number;
         currency: string;
@@ -217,10 +210,8 @@ export class PaypalAuthController {
             createPaymentDto.returnUrl,
             createPaymentDto.cancelUrl
         );
-    }
-
-    @Post('execute-payment')
-    @UseGuards(JwtAuthGuard)
+    }    @Post('execute-payment')
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
     async executePayment(@Body() executePaymentDto: {
         paymentId: string;
         payerId: string;
@@ -229,16 +220,12 @@ export class PaypalAuthController {
             executePaymentDto.paymentId,
             executePaymentDto.payerId
         );
-    }
-
-    @Get('payment/:id')
-    @UseGuards(JwtAuthGuard)
+    }    @Get('payment/:id')
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
     async getPayment(@Param('id') paymentId: string) {
         return await this.paypalAuthService.getPayment(paymentId);
-    }
-
-    @Post('create-payout')
-    @UseGuards(JwtAuthGuard)
+    }    @Post('create-payout')
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
     async createPayout(@Body() createPayoutDto: {
         recipientEmail: string;
         amount: number;

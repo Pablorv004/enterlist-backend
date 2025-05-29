@@ -12,12 +12,13 @@ import {
 import { AdminActionsService } from './admin-actions.service';
 import { CreateAdminActionDto } from './dto/admin-action.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { EmailConfirmedGuard } from '../auth/guards/email-confirmed.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { user_role } from '@prisma/client';
 
 @Controller('api/admin-actions')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, EmailConfirmedGuard, RolesGuard)
 @Roles(user_role.admin)
 export class AdminActionsController {
     constructor(private readonly adminActionsService: AdminActionsService) { }

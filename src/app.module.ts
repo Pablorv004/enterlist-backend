@@ -17,6 +17,7 @@ import { YoutubeAuthModule } from './youtube-auth/youtube-auth.module';
 import { PaypalAuthModule } from './paypal-auth/paypal-auth.module';
 import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { TransactionsModule } from './transactions/transactions.module';
+import { EmailModule } from './email/email.module';
 
 @Module({  imports: [
     ConfigModule,

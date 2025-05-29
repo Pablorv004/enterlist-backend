@@ -2,6 +2,7 @@ import { Controller, Get, Query, Req, Res, UseGuards, ParseIntPipe, DefaultValue
 import { Response } from 'express';
 import { SpotifyAuthService } from './spotify-auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { EmailConfirmedGuard } from '../auth/guards/email-confirmed.guard';
 import { RoleRequiredGuard } from '../auth/guards/role-required.guard';
 import { ConfigService } from '@nestjs/config';
 
@@ -10,15 +11,13 @@ export class SpotifyAuthController {
     constructor(
         private readonly spotifyAuthService: SpotifyAuthService,
         private readonly configService: ConfigService
-    ) { }
-
-    @Get('login')
-    @UseGuards(JwtAuthGuard)
+    ) { }    @Get('login')
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
     async login(@Req() req, @Res() res: Response) {
         const authUrl = await this.spotifyAuthService.getAuthorizationUrl(req.user.user_id);
         return res.redirect(authUrl);
     }    @Get('login-url')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
     async getLoginUrl(@Req() req) {
         const authUrl = await this.spotifyAuthService.getAuthorizationUrl(req.user.user_id);
         return { url: authUrl };
@@ -80,8 +79,8 @@ export class SpotifyAuthController {
             }
             return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(err.message)}`);
         }
-    }@Get('playlists')
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    }    @Get('playlists')
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     async getPlaylists(
         @Req() req,
         @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
@@ -89,7 +88,7 @@ export class SpotifyAuthController {
     ) {
         return this.spotifyAuthService.getUserPlaylists(req.user.user_id, limit, offset);
     }    @Get('tracks')
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     async getUserTracks(
         @Req() req,
         @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
@@ -97,14 +96,14 @@ export class SpotifyAuthController {
     ) {
         return this.spotifyAuthService.getUserTracks(req.user.user_id, limit, offset);
     }    @Post('import/playlists')
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     async importPlaylists(
         @Req() req,
         @Body() body: { playlistIds: string[] }
     ) {
         return this.spotifyAuthService.importPlaylistsToDatabase(req.user.user_id, body.playlistIds);
     }    @Post('import/tracks')
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     async importTracks(
         @Req() req,
         @Body() body: { trackIds: string[] }

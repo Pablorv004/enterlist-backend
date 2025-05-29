@@ -13,6 +13,7 @@ import {
 import { PaymentMethodsService } from './payment-methods.service';
 import { CreatePaymentMethodDto, UpdatePaymentMethodDto } from './dto/payment-method.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { EmailConfirmedGuard } from '../auth/guards/email-confirmed.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { RoleRequiredGuard } from '../auth/guards/role-required.guard';
 import { OwnershipGuard } from '../auth/guards/ownership.guard';
@@ -22,7 +23,7 @@ import { user_role } from '@prisma/client';
 import { PaypalAuthService } from '../paypal-auth/paypal-auth.service';
 
 @Controller('api/payment-methods')
-@UseGuards(JwtAuthGuard, RoleRequiredGuard)
+@UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
 export class PaymentMethodsController {
     private readonly logger = new Logger(PaymentMethodsController.name);
 

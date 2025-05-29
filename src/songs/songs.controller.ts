@@ -14,6 +14,7 @@ import {
 import { SongsService } from './songs.service';
 import { CreateSongDto, UpdateSongDto } from './dto/song.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { EmailConfirmedGuard } from '../auth/guards/email-confirmed.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { RoleRequiredGuard } from '../auth/guards/role-required.guard';
 import { OwnershipGuard } from '../auth/guards/ownership.guard';
@@ -31,7 +32,7 @@ export class SongsController {
         @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
     ) {
         return this.songsService.findAll(skip, take);
-    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'user', userField: 'user_id', paramName: 'artistId' })
     @Get('artist/:artistId')
     findByArtist(
@@ -45,13 +46,11 @@ export class SongsController {
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.songsService.findOne(id);
-    }
-
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     @Post()
     create(@Body() createSongDto: CreateSongDto) {
         return this.songsService.create(createSongDto);
-    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'song', userField: 'artist_id' })
     @Put(':id')
     update(
@@ -59,16 +58,12 @@ export class SongsController {
         @Body() updateSongDto: UpdateSongDto,
     ) {
         return this.songsService.update(id, updateSongDto);
-    }
-
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'song', userField: 'artist_id' })
     @Delete(':id')
     remove(@Param('id') id: string) {
         return this.songsService.remove(id);
-    }
-
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard, OwnershipGuard)
+    }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'user', userField: 'user_id', paramName: 'artistId' })
     @Post('sync/:artistId')
     syncSongs(@Param('artistId') artistId: string) {

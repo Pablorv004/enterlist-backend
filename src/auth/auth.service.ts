@@ -1,6 +1,7 @@
 import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
@@ -11,7 +12,8 @@ export class AuthService {
     constructor(
         private readonly prismaService: PrismaService,
         private readonly jwtService: JwtService,
-    ) { }    async register(registerDto: RegisterDto) {
+        private readonly emailService: EmailService,
+    ) { }async register(registerDto: RegisterDto) {
         const { email, username, password } = registerDto;
 
         // For OAuth users, check if they already exist first by oauth_provider and oauth_id
@@ -45,13 +47,16 @@ export class AuthService {
                     ? 'Email already in use'
                     : 'Username already taken'
             );
-        }
+        }        const passwordHash = await this.hashPassword(password);
+        const emailConfirmationToken = uuidv4();
 
-        const passwordHash = await this.hashPassword(password);        const userData: any = {
+        const userData: any = {
             user_id: uuidv4(),
             email,
             username,
             password_hash: passwordHash,
+            email_confirmed: false,
+            email_confirmation_token: emailConfirmationToken,
             oauth_provider: registerDto.oauth_provider,
             oauth_id: registerDto.oauth_id,
             created_at: new Date(),
@@ -62,6 +67,15 @@ export class AuthService {
         const user = await this.prismaService.user.create({
             data: userData,
         });
+
+        // Send email confirmation email (only for non-OAuth users)
+        if (!registerDto.oauth_provider) {
+            await this.emailService.sendEmailConfirmation(
+                user.email,
+                user.username,
+                emailConfirmationToken
+            );
+        }
 
         return this.generateToken(user);
     }
@@ -116,5 +130,61 @@ export class AuthService {
                 role: user.role,
             },
         };
+    }
+
+    async confirmEmail(token: string) {
+        const user = await this.prismaService.user.findFirst({
+            where: {
+                email_confirmation_token: token,
+                email_confirmed: false,
+            },
+        });
+
+        if (!user) {
+            throw new UnauthorizedException('Invalid or expired confirmation token');
+        }
+
+        await this.prismaService.user.update({
+            where: { user_id: user.user_id },
+            data: {
+                email_confirmed: true,
+                email_confirmation_token: null,
+                updated_at: new Date(),
+            },
+        });
+
+        return { message: 'Email confirmed successfully' };
+    }
+
+    async resendEmailConfirmation(email: string) {
+        const user = await this.prismaService.user.findUnique({
+            where: { email },
+        });
+
+        if (!user) {
+            throw new UnauthorizedException('User not found');
+        }
+
+        if (user.email_confirmed) {
+            throw new ConflictException('Email already confirmed');
+        }
+
+        const emailConfirmationToken = uuidv4();
+        
+        await this.prismaService.user.update({
+            where: { user_id: user.user_id },
+            data: {
+                email_confirmation_token: emailConfirmationToken,
+                updated_at: new Date(),
+            },
+        });
+
+        await this.emailService.sendEmailConfirmation(
+            user.email,
+            user.username,
+            emailConfirmationToken
+        );
+
+        return { message: 'Confirmation email sent' };
     }
 }

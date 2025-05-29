@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 import { v4 as uuidv4 } from 'uuid';
 import * as bcrypt from 'bcrypt';
@@ -7,7 +8,10 @@ import { user_role } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
-    constructor(private readonly prismaService: PrismaService) { }
+    constructor(
+        private readonly prismaService: PrismaService,
+        private readonly emailService: EmailService
+    ) { }
 
     async findAll(skip = 0, take = 10) {
         const [data, total] = await Promise.all([
@@ -405,13 +409,13 @@ export class UsersService {
                 is_active: true
             }
         });
-    }
-
-    // Update password method
+    }    // Update password method
     async updatePassword(userId: string, currentPassword: string, newPassword: string) {        const user = await this.prismaService.user.findUnique({
             where: { user_id: userId },
             select: {
                 user_id: true,
+                username: true,
+                email: true,
                 password_hash: true
             }
         });
@@ -430,7 +434,7 @@ export class UsersService {
         const saltRounds = 10;
         const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
 
-        return this.prismaService.user.update({
+        const updatedUser = await this.prismaService.user.update({
             where: { user_id: userId },
             data: {
                 password_hash: newPasswordHash,
@@ -442,5 +446,18 @@ export class UsersService {
                 email: true
             }
         });
+
+        // Send email notification about password change
+        try {
+            await this.emailService.sendPasswordChangeNotification(
+                updatedUser.email,
+                updatedUser.username
+            );
+        } catch (emailError) {
+            console.error('Failed to send password change notification email:', emailError);
+            // Don't fail the password update if email fails
+        }
+
+        return updatedUser;
     }
 }

@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { SkipEmailConfirmation } from './decorators/skip-email-confirmation.decorator';
 import { Request } from 'express';
 
 @Controller('api/auth')
@@ -19,6 +20,7 @@ export class AuthController {
     async login(@Body() loginDto: LoginDto) {
         return this.authService.login(loginDto);
     }    @UseGuards(JwtAuthGuard)
+    @SkipEmailConfirmation()
     @Get('profile')
     getProfile(@Req() req: Request) {
         // Ensure we're returning a complete user object with all required fields
@@ -30,5 +32,15 @@ export class AuthController {
         }
         
         return user;
+    }
+
+    @Post('confirm-email')
+    async confirmEmail(@Body() body: { token: string }) {
+        return this.authService.confirmEmail(body.token);
+    }
+
+    @Post('resend-confirmation')
+    async resendConfirmation(@Body() body: { email: string }) {
+        return this.authService.resendEmailConfirmation(body.email);
     }
 }

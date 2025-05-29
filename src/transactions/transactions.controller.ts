@@ -14,6 +14,7 @@ import {
 import { TransactionsService } from './transactions.service';
 import { CreateTransactionDto, UpdateTransactionDto } from './dto/transaction.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { EmailConfirmedGuard } from '../auth/guards/email-confirmed.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { RoleRequiredGuard } from '../auth/guards/role-required.guard';
 import { OwnershipGuard } from '../auth/guards/ownership.guard';
@@ -23,7 +24,7 @@ import { Ownership } from '../auth/decorators/ownership.decorator';
 import { user_role, transaction_status } from '@prisma/client';
 
 @Controller('api/transactions')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, EmailConfirmedGuard)
 export class TransactionsController {
     constructor(private readonly transactionsService: TransactionsService) { }
 

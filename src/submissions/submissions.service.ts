@@ -1,12 +1,16 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import { CreateSubmissionDto, UpdateSubmissionDto } from './dto/submission.dto';
 import { v4 as uuidv4 } from 'uuid';
 import { submission_status } from '@prisma/client';
 
 @Injectable()
 export class SubmissionsService {
-    constructor(private readonly prismaService: PrismaService) { }
+    constructor(
+        private readonly prismaService: PrismaService,
+        private readonly emailService: EmailService
+    ) { }
 
     async findAll(skip = 0, take = 10, status?: submission_status) {
         const where = status ? { status } : {};
@@ -265,50 +269,81 @@ export class SubmissionsService {
             throw new ConflictException(
                 `Submission already exists for this artist, playlist, and song`
             );
-        }
-
-        return this.prismaService.submission.create({
+        }        return this.prismaService.submission.create({
             data: {
                 submission_id: uuidv4(),
                 ...createSubmissionDto,
                 status: submission_status.pending,
                 submitted_at: new Date(),
-            },
-            include: {
+            },            include: {
                 artist: {
                     select: {
                         username: true,
+                        email: true,
                     },
                 },
                 playlist: {
                     select: {
                         name: true,
+                        submission_fee: true,
+                        creator: {
+                            select: {
+                                username: true,
+                                email: true,
+                            },
+                        },
                     },
                 },
                 song: {
                     select: {
                         title: true,
+                        artist_name_on_platform: true,
                     },
                 },
-            },
-        });
-    }
+            },}).then(async (submission) => {
+            // Send email notifications
+            try {                // Send receipt to artist
+                await this.emailService.sendSubmissionReceipt(
+                    submission.artist.email,
+                    submission.artist.username,
+                    submission.song.title,
+                    submission.playlist.name,
+                    submission.playlist.submission_fee.toString(),
+                    submission.submission_id
+                );
 
-    async update(id: string, updateSubmissionDto: UpdateSubmissionDto) {
-        await this.findOne(id);
+                // Send notification to playlist creator
+                await this.emailService.sendSubmissionNotification(
+                    submission.playlist.creator.email,
+                    submission.playlist.creator.username,
+                    submission.song.title,
+                    submission.artist.username,
+                    submission.playlist.name,
+                    submission.submission_id
+                );
+            } catch (emailError) {
+                console.error('Failed to send submission emails:', emailError);
+                // Don't fail the submission if emails fail
+            }
+
+            return submission;
+        });
+    }    async update(id: string, updateSubmissionDto: UpdateSubmissionDto) {
+        const existingSubmission = await this.findOne(id);
 
         const data = { ...updateSubmissionDto };
         if (updateSubmissionDto.status && !updateSubmissionDto.reviewed_at) {
             data.reviewed_at = new Date();
         }
 
-        return this.prismaService.submission.update({
+        const updatedSubmission = await this.prismaService.submission.update({
             where: { submission_id: id },
             data,
             include: {
                 artist: {
                     select: {
                         username: true,
+                        email: true,
                     },
                 },
                 playlist: {
@@ -323,6 +358,27 @@ export class SubmissionsService {
                 },
             },
         });
+
+        // Send email notification if status changed to approved or rejected
+        if (updateSubmissionDto.status && 
+            updateSubmissionDto.status !== existingSubmission.status &&
+            (updateSubmissionDto.status === 'approved' || updateSubmissionDto.status === 'rejected')) {
+            try {
+                await this.emailService.sendSubmissionStatusUpdate(
+                    updatedSubmission.artist.email,
+                    updatedSubmission.artist.username,
+                    updatedSubmission.song.title,
+                    updatedSubmission.playlist.name,
+                    updateSubmissionDto.status,
+                    updateSubmissionDto.review_feedback
+                );
+            } catch (emailError) {
+                console.error('Failed to send submission status update email:', emailError);
+                // Don't fail the update if email fails
+            }
+        }
+
+        return updatedSubmission;
     }
 
     async remove(id: string) {

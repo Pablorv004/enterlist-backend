@@ -2,6 +2,7 @@ import { Controller, Get, Query, Req, Res, UseGuards, ParseIntPipe, DefaultValue
 import { Response } from 'express';
 import { YoutubeAuthService } from './youtube-auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { EmailConfirmedGuard } from '../auth/guards/email-confirmed.guard';
 import { RoleRequiredGuard } from '../auth/guards/role-required.guard';
 import { ConfigService } from '@nestjs/config';
 
@@ -10,15 +11,13 @@ export class YoutubeAuthController {
     constructor(
         private readonly youtubeAuthService: YoutubeAuthService,
         private readonly configService: ConfigService
-    ) { }
-
-    @Get('login')
-    @UseGuards(JwtAuthGuard)
+    ) { }    @Get('login')
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
     async login(@Req() req, @Res() res: Response) {
         const authUrl = await this.youtubeAuthService.getAuthorizationUrl(req.user.user_id);
         return res.redirect(authUrl);
     }    @Get('login-url')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
     async getLoginUrl(@Req() req) {
         const authUrl = await this.youtubeAuthService.getAuthorizationUrl(req.user.user_id);
         return { url: authUrl };
@@ -80,8 +79,8 @@ export class YoutubeAuthController {
             }
             return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(err.message)}`);
         }
-    }@Get('playlists')
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    }    @Get('playlists')
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     async getPlaylists(
         @Req() req,
         @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
@@ -89,7 +88,7 @@ export class YoutubeAuthController {
     ) {
         return this.youtubeAuthService.getUserPlaylists(req.user.user_id, limit, offset);
     }    @Get('channels')
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     async getChannels(
         @Req() req,
         @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
@@ -97,7 +96,7 @@ export class YoutubeAuthController {
     ) {
         return this.youtubeAuthService.getUserChannels(req.user.user_id, limit, offset);
     }    @Get('videos')
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     async getUserVideos(
         @Req() req,
         @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
@@ -106,7 +105,7 @@ export class YoutubeAuthController {
     ) {
         return this.youtubeAuthService.getUserVideos(req.user.user_id, limit, offset, musicOnly);
     }    @Get('songs')
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     async getUserSongs(
         @Req() req,
         @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
@@ -114,14 +113,14 @@ export class YoutubeAuthController {
     ) {
         return this.youtubeAuthService.getUserSongs(req.user.user_id, limit, offset);
     }    @Post('import/playlists')
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     async importPlaylists(
         @Req() req,
         @Body() body: { playlistIds: string[] }
     ) {
         return this.youtubeAuthService.importPlaylistsToDatabase(req.user.user_id, body.playlistIds);
     }    @Post('import/videos')
-    @UseGuards(JwtAuthGuard, RoleRequiredGuard)
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     async importVideos(
         @Req() req,
         @Body() body: { videoIds: string[] }
