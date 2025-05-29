@@ -19,7 +19,8 @@ export class AdminService {
             this.prismaService.user.count({
                 where: { 
                     is_active: true,
-                    role: { not: 'admin' }
+                    role: { not: 'admin' },
+                    deleted: false
                 }
             }),
             this.prismaService.playlist.count({
@@ -28,19 +29,28 @@ export class AdminService {
             this.prismaService.song.count({
                 where: { deleted: false }
             }),
-            this.prismaService.submission.count(),
-            this.prismaService.transaction.count(),
+            this.prismaService.submission.count({
+                where: { deleted: false }
+            }),
+            this.prismaService.transaction.count({
+                where: { deleted: false }
+            }),
             this.prismaService.withdrawal.count({
-                where: { status: 'pending' }
+                where: { 
+                    status: 'pending',
+                    deleted: false 
+                }
             })
-        ]);        // Get users registered per month (last 12 months)
+        ]);
+
+        // Get users registered per month (last 12 months)
         const usersPerMonth = await this.prismaService.$queryRaw`
             SELECT 
                 DATE_TRUNC('month', created_at) as month,
                 COUNT(*) as count
             FROM users
             WHERE created_at >= NOW() - INTERVAL '12 months'
-                AND is_active = true AND role != 'admin'
+                AND is_active = true AND role != 'admin' AND deleted = false
             GROUP BY DATE_TRUNC('month', created_at)
             ORDER BY month DESC
             LIMIT 12
@@ -65,30 +75,38 @@ export class AdminService {
                 }
             },
             take: 10
-        });        // Get users by role (excluding admins)
+        });
+
+        // Get users by role (excluding admins)
         const usersByRole = await this.prismaService.user.groupBy({
             by: ['role'],
-            where: { 
+            where: {
                 is_active: true,
-                role: { not: 'admin' }
+                role: { not: 'admin' },
+                deleted: false
             },
             _count: {
                 user_id: true
             }
-        });// Get submissions per month (last 12 months)
+        });
+
+        // Get submissions per month (last 12 months)
         const submissionsPerMonth = await this.prismaService.$queryRaw`
             SELECT 
                 DATE_TRUNC('month', submitted_at) as month,
                 COUNT(*) as count
             FROM submissions
             WHERE submitted_at >= NOW() - INTERVAL '12 months'
+                AND deleted = false
             GROUP BY DATE_TRUNC('month', submitted_at)
             ORDER BY month DESC
             LIMIT 12
         `.then((result: any[]) => result.map(row => ({
             ...row,
             count: Number(row.count)
-        })));        // Get playlists created per month (last 12 months)
+        })));
+
+        // Get playlists created per month (last 12 months)
         const playlistsPerMonth = await this.prismaService.$queryRaw`
             SELECT 
                 DATE_TRUNC('month', created_at) as month,
@@ -107,14 +125,17 @@ export class AdminService {
         // Get revenue statistics
         const revenueStats = await this.prismaService.transaction.aggregate({
             where: {
-                status: 'succeeded'
+                status: 'succeeded',
+                deleted: false
             },
             _sum: {
                 amount_total: true,
                 platform_fee: true,
                 creator_payout_amount: true
             }
-        });        return {
+        });
+
+        return {
             totals: {
                 users: Number(totalUsers),
                 playlists: Number(totalPlaylists),
@@ -142,7 +163,9 @@ export class AdminService {
                 totalPayouts: Number(revenueStats._sum?.creator_payout_amount || 0)
             }
         };
-    }    async getDashboardData() {
+    }
+
+    async getDashboardData() {
         // Get recent activity statistics
         const [
             recentUsers,
@@ -151,7 +174,10 @@ export class AdminService {
             pendingWithdrawalsData
         ] = await Promise.all([
             this.prismaService.user.findMany({
-                where: { is_active: true },
+                where: { 
+                    is_active: true,
+                    deleted: false 
+                },
                 orderBy: { created_at: 'desc' },
                 take: 5,
                 select: {
@@ -161,7 +187,9 @@ export class AdminService {
                     role: true,
                     created_at: true
                 }
-            }),            this.prismaService.submission.findMany({
+            }),
+            this.prismaService.submission.findMany({
+                where: { deleted: false },
                 orderBy: { submitted_at: 'desc' },
                 take: 5,
                 include: {
@@ -177,6 +205,7 @@ export class AdminService {
                 }
             }),
             this.prismaService.transaction.findMany({
+                where: { deleted: false },
                 orderBy: { created_at: 'desc' },
                 take: 5,
                 include: {
@@ -193,7 +222,10 @@ export class AdminService {
                 }
             }),
             this.prismaService.withdrawal.findMany({
-                where: { status: 'pending' },
+                where: { 
+                    status: 'pending',
+                    deleted: false 
+                },
                 orderBy: { created_at: 'desc' },
                 take: 10,
                 include: {
@@ -212,9 +244,11 @@ export class AdminService {
             },
             pendingWithdrawals: pendingWithdrawalsData
         };
-    }    async getWithdrawals(skip = 0, take = 10, status?: 'pending' | 'processing' | 'completed' | 'failed') {
-        const where = status ? { status } : {};
-        
+    }
+
+    async getWithdrawals(skip = 0, take = 10, status?: 'pending' | 'processing' | 'completed' | 'failed') {
+        const where = status ? { status, deleted: false } : { deleted: false };
+
         const [withdrawals, total] = await Promise.all([
             this.prismaService.withdrawal.findMany({
                 where,
@@ -232,7 +266,9 @@ export class AdminService {
                 }
             }),
             this.prismaService.withdrawal.count({ where })
-        ]);        return {
+        ]);
+
+        return {
             data: withdrawals,
             total: Number(total),
             skip,
@@ -256,7 +292,9 @@ export class AdminService {
 
         if (withdrawal.status !== 'pending') {
             throw new Error('Withdrawal has already been processed');
-        }        const updatedWithdrawal = await this.prismaService.withdrawal.update({
+        }
+
+        const updatedWithdrawal = await this.prismaService.withdrawal.update({
             where: { withdrawal_id: withdrawalId },
             data: {
                 status,
@@ -268,6 +306,7 @@ export class AdminService {
                 }
             }
         });
+
         return updatedWithdrawal;
     }
 
@@ -275,10 +314,14 @@ export class AdminService {
     async getUsers(skip = 0, take = 10) {
         const [users, total] = await Promise.all([
             this.prismaService.user.findMany({
-                where: { role: { not: 'admin' } },
+                where: { 
+                    role: { not: 'admin' },
+                    deleted: false 
+                },
                 skip,
                 take,
-                orderBy: { created_at: 'desc' },                select: {
+                orderBy: { created_at: 'desc' },
+                select: {
                     user_id: true,
                     username: true,
                     email: true,
@@ -295,7 +338,12 @@ export class AdminService {
                     }
                 }
             }),
-            this.prismaService.user.count({ where: { role: { not: 'admin' } } })
+            this.prismaService.user.count({ 
+                where: { 
+                    role: { not: 'admin' },
+                    deleted: false 
+                } 
+            })
         ]);
 
         return {
@@ -309,13 +357,14 @@ export class AdminService {
     async getUser(userId: string) {
         const user = await this.prismaService.user.findUnique({
             where: { user_id: userId },
-            include: {                    _count: {
-                        select: {
-                            playlists: true,
-                            songs: true,
-                            submissions: true
-                        }
+            include: {
+                _count: {
+                    select: {
+                        playlists: true,
+                        songs: true,
+                        submissions: true
                     }
+                }
             }
         });
 
@@ -345,21 +394,25 @@ export class AdminService {
     }
 
     async deleteUser(userId: string) {
-        // Soft delete by setting is_active to false
+        // Soft delete by setting deleted flag to true
+        const user = await this.prismaService.user.update({
+            where: { user_id: userId },
+            data: { deleted: true },
+        });
+
+        return user;
+    }
+
+    async suspendUser(userId: string, reason: string) {
         const user = await this.prismaService.user.update({
             where: { user_id: userId },
             data: { is_active: false },
         });
 
         return user;
-    }    async suspendUser(userId: string, reason: string) {
-        const user = await this.prismaService.user.update({
-            where: { user_id: userId },
-            data: { is_active: false },
-        });
+    }
 
-        return user;
-    }    async reactivateUser(userId: string) {
+    async reactivateUser(userId: string) {
         const user = await this.prismaService.user.update({
             where: { user_id: userId },
             data: { is_active: true },
@@ -372,9 +425,11 @@ export class AdminService {
     async getPlaylists(skip = 0, take = 10) {
         const [playlists, total] = await Promise.all([
             this.prismaService.playlist.findMany({
+                where: { deleted: false },
                 skip,
                 take,
-                orderBy: { created_at: 'desc' },                include: {
+                orderBy: { created_at: 'desc' },
+                include: {
                     creator: {
                         select: { username: true, email: true }
                     },
@@ -385,7 +440,7 @@ export class AdminService {
                     }
                 }
             }),
-            this.prismaService.playlist.count()
+            this.prismaService.playlist.count({ where: { deleted: false } })
         ]);
 
         return {
@@ -398,7 +453,8 @@ export class AdminService {
 
     async getPlaylist(playlistId: string) {
         const playlist = await this.prismaService.playlist.findUnique({
-            where: { playlist_id: playlistId },            include: {
+            where: { playlist_id: playlistId },
+            include: {
                 creator: {
                     select: { username: true, email: true }
                 },
@@ -433,9 +489,13 @@ export class AdminService {
         });
 
         return playlist;
-    }    async flagPlaylist(playlistId: string, reason: string) {
+    }
+
+    async flagPlaylist(playlistId: string, reason: string) {
         return { message: 'Playlist flagged successfully' };
-    }    async unflagPlaylist(playlistId: string) {
+    }
+
+    async unflagPlaylist(playlistId: string) {
         return { message: 'Playlist unflagged successfully' };
     }
 
@@ -443,6 +503,7 @@ export class AdminService {
     async getSongs(skip = 0, take = 10) {
         const [songs, total] = await Promise.all([
             this.prismaService.song.findMany({
+                where: { deleted: false },
                 skip,
                 take,
                 orderBy: { created_at: 'desc' },
@@ -457,7 +518,7 @@ export class AdminService {
                     }
                 }
             }),
-            this.prismaService.song.count()
+            this.prismaService.song.count({ where: { deleted: false } })
         ]);
 
         return {
@@ -513,16 +574,20 @@ export class AdminService {
         });
 
         return song;
-    }    async flagSong(songId: string, reason: string) {
+    }
+
+    async flagSong(songId: string, reason: string) {
         return { message: 'Song flagged successfully' };
-    }    async unflagSong(songId: string) {
+    }
+
+    async unflagSong(songId: string) {
         return { message: 'Song unflagged successfully' };
     }
 
     // Admin Submission Management
     async getSubmissions(skip = 0, take = 10, status?: string) {
-        const where = status ? { status: status as submission_status } : {};
-        
+        const where = status ? { status: status as submission_status, deleted: false } : { deleted: false };
+
         const [submissions, total] = await Promise.all([
             this.prismaService.submission.findMany({
                 where,
@@ -531,7 +596,7 @@ export class AdminService {
                 orderBy: { submitted_at: 'desc' },
                 include: {
                     artist: {
-                        select: { username: true, email: true }
+                        select: { username: true, email: true, }
                     },
                     playlist: {
                         select: { name: true }
@@ -586,15 +651,18 @@ export class AdminService {
     }
 
     async deleteSubmission(submissionId: string) {
-        const submission = await this.prismaService.submission.delete({
+        const submission = await this.prismaService.submission.update({
             where: { submission_id: submissionId },
+            data: { deleted: true },
         });
 
         return submission;
-    }    // Admin Transaction Management
+    }
+
+    // Admin Transaction Management
     async getTransactions(skip = 0, take = 10, status?: string) {
-        const where = status ? { status: status as transaction_status } : {};
-        
+        const where = status ? { status: status as transaction_status, deleted: false } : { deleted: false };
+
         const [transactions, total] = await Promise.all([
             this.prismaService.transaction.findMany({
                 where,
@@ -658,6 +726,7 @@ export class AdminService {
     // Admin Platform Management
     async getPlatforms() {
         const platforms = await this.prismaService.platform.findMany({
+            where: { deleted: false },
             orderBy: { name: 'asc' }
         });
 
@@ -694,8 +763,9 @@ export class AdminService {
     }
 
     async deletePlatform(platformId: number) {
-        const platform = await this.prismaService.platform.delete({
-            where: { platform_id: platformId }
+        const platform = await this.prismaService.platform.update({
+            where: { platform_id: platformId },
+            data: { deleted: true }
         });
 
         return platform;

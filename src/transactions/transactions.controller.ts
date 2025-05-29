@@ -28,16 +28,7 @@ import { user_role, transaction_status } from '@prisma/client';
 export class TransactionsController {
     constructor(private readonly transactionsService: TransactionsService) { }
 
-    @UseGuards(RolesGuard)
-    @Roles(user_role.admin)
-    @Get()
-    findAll(
-        @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
-        @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
-        @Query('status') status?: transaction_status,
-    ) {
-        return this.transactionsService.findAll(skip, take, status);
-    }    @UseGuards(RoleRequiredGuard, OwnershipGuard)
+    @UseGuards(RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'user', userField: 'user_id', paramName: 'artistId' })
     @Get('artist/:artistId')
     findByArtist(

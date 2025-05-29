@@ -10,10 +10,8 @@ export class SubmissionsService {
     constructor(
         private readonly prismaService: PrismaService,
         private readonly emailService: EmailService
-    ) { }
-
-    async findAll(skip = 0, take = 10, status?: submission_status) {
-        const where = status ? { status } : {};
+    ) { }    async findAll(skip = 0, take = 10, status?: submission_status) {
+        const where = status ? { status, deleted: false } : { deleted: false };
 
         const [data, total] = await Promise.all([
             this.prismaService.submission.findMany({
@@ -51,9 +49,11 @@ export class SubmissionsService {
 
         return { data, total, skip, take };
     }    async findByArtist(artistId: string, skip = 0, take = 10) {
+        const where = { artist_id: artistId, deleted: false };
+        
         const [data, total] = await Promise.all([
             this.prismaService.submission.findMany({
-                where: { artist_id: artistId },
+                where,
                 skip,
                 take,
                 include: {
@@ -84,18 +84,22 @@ export class SubmissionsService {
                             url: true,
                             cover_image_url: true,
                         },
-                    },
-                },
+                    },                },
                 orderBy: { submitted_at: 'desc' },
             }),
-            this.prismaService.submission.count({ where: { artist_id: artistId } }),
+            this.prismaService.submission.count({ where }),
         ]);
 
-        return { data, total, skip, take };
-    }    async findByPlaylist(playlistId: string, skip = 0, take = 10, status?: submission_status) {
+        return { data, total, skip, take };    }async findByPlaylist(playlistId: string, skip = 0, take = 10, status?: submission_status) {
+        const where = { 
+            playlist_id: playlistId,
+            deleted: false,
+            ...(status ? { status } : {}) 
+        };
+        
         const [data, total] = await Promise.all([
             this.prismaService.submission.findMany({
-                where: { playlist_id: playlistId, ...(status ? { status } : {}) },
+                where,
                 skip,
                 take,
                 include: {
@@ -114,17 +118,17 @@ export class SubmissionsService {
                             url: true,
                             cover_image_url: true,
                         },
-                    },
-                },
+                    },                },
                 orderBy: { submitted_at: 'desc' },
             }),
-            this.prismaService.submission.count({ where: { playlist_id: playlistId } }),
+            this.prismaService.submission.count({ where }),
         ]);
 
         return { data, total, skip, take };
     }    async findByCreator(creatorId: string, skip = 0, take = 10, status?: submission_status, playlistId?: string, artistId?: string) {
         const where: any = { 
-            playlist: { creator_id: creatorId } 
+            playlist: { creator_id: creatorId },
+            deleted: false
         };
 
         // Add status filter if provided
@@ -177,9 +181,7 @@ export class SubmissionsService {
         ]);
 
         return { data, total, skip, take };
-    }
-
-    async findOne(id: string) {
+    }    async findOne(id: string) {
         const data = await this.prismaService.submission.findUnique({
             where: { submission_id: id },
             include: {
@@ -215,7 +217,7 @@ export class SubmissionsService {
             },
         });
 
-        if (!data) {
+        if (!data || data.deleted) {
             throw new NotFoundException(`Submission with ID ${id} not found`);
         }
 
@@ -255,13 +257,12 @@ export class SubmissionsService {
 
         if (song.artist_id !== artist_id && artist.role !== 'admin') {
             throw new ConflictException(`Song does not belong to this artist`);
-        }
-
-        const existingSubmission = await this.prismaService.submission.findFirst({
+        }        const existingSubmission = await this.prismaService.submission.findFirst({
             where: {
                 artist_id,
                 playlist_id,
                 song_id,
+                deleted: false
             },
         });
 
@@ -379,19 +380,18 @@ export class SubmissionsService {
         }
 
         return updatedSubmission;
-    }
-
-    async remove(id: string) {
+    }    async remove(id: string) {
         const submission = await this.findOne(id);
 
         if (submission.transaction) {
             throw new ConflictException(
                 `Cannot delete submission with ID ${id} as it has a transaction attached`
             );
-        }
-
-        return this.prismaService.submission.delete({
+        }        return this.prismaService.submission.update({
             where: { submission_id: id },
+            data: { 
+                deleted: true
+            },
         });
     }    async getSubmissionStatsByCreator(creatorId: string) {
         const stats = await this.prismaService.submission.groupBy({
@@ -399,7 +399,8 @@ export class SubmissionsService {
             where: {
                 playlist: {
                     creator_id: creatorId
-                }
+                },
+                deleted: false
             },
             _count: {
                 submission_id: true
@@ -413,7 +414,8 @@ export class SubmissionsService {
                 submission: {
                     playlist: {
                         creator_id: creatorId
-                    }
+                    },
+                    deleted: false
                 },
                 status: 'succeeded'
             },
@@ -449,7 +451,8 @@ export class SubmissionsService {
                 },
                 transaction: {
                     status: 'succeeded'
-                }
+                },
+                deleted: false
             },
             include: {
                 transaction: {
@@ -480,7 +483,8 @@ export class SubmissionsService {
                     playlist: {
                         creator_id: creatorId
                     },
-                    status: 'approved'
+                    status: 'approved',
+                    deleted: false
                 },
                 status: 'succeeded',
                 created_at: {

@@ -10,10 +10,8 @@ export class TransactionsService {
     constructor(
         private readonly prismaService: PrismaService,
         private readonly paypalAuthService: PaypalAuthService,
-    ) { }
-
-    async findAll(skip = 0, take = 10, status?: transaction_status) {
-        const where = status ? { status } : {};
+    ) { }    async findAll(skip = 0, take = 10, status?: transaction_status) {
+        const where = status ? { status, deleted: false } : { deleted: false };
 
         const [data, total] = await Promise.all([
             this.prismaService.transaction.findMany({
@@ -57,15 +55,15 @@ export class TransactionsService {
         ]);
 
         return { data, total, skip, take };
-    }
-
-    async findByArtist(artistId: string, skip = 0, take = 10) {
+    }    async findByArtist(artistId: string, skip = 0, take = 10) {
         const [data, total] = await Promise.all([
             this.prismaService.transaction.findMany({
                 where: {
                     submission: {
                         artist_id: artistId,
+                        deleted: false
                     },
+                    deleted: false
                 },
                 skip,
                 take,
@@ -117,7 +115,9 @@ export class TransactionsService {
                         playlist: {
                             creator_id: ownerId,
                         },
+                        deleted: false
                     },
+                    deleted: false
                 },
                 skip,
                 take,
@@ -155,7 +155,9 @@ export class TransactionsService {
                         playlist: {
                             creator_id: ownerId,
                         },
+                        deleted: false
                     },
+                    deleted: false
                 },
             }),
         ]);
@@ -202,17 +204,14 @@ export class TransactionsService {
                         details: true,
                     },
                 },
-            },
-        });
+            },        });
 
-        if (!transaction) {
+        if (!transaction || transaction.deleted) {
             throw new NotFoundException(`Transaction with ID ${id} not found`);
         }
 
         return transaction;
-    }
-
-    async create(createTransactionDto: CreateTransactionDto) {
+    }    async create(createTransactionDto: CreateTransactionDto) {
         const { submission_id, payment_method_id } = createTransactionDto;
 
         const submission = await this.prismaService.submission.findUnique({
@@ -222,15 +221,13 @@ export class TransactionsService {
             },
         });
 
-        if (!submission) {
+        if (!submission || submission.deleted) {
             throw new NotFoundException(`Submission with ID ${submission_id} not found`);
-        }
-
-        const paymentMethod = await this.prismaService.paymentMethod.findUnique({
+        }        const paymentMethod = await this.prismaService.paymentMethod.findUnique({
             where: { payment_method_id },
         });
 
-        if (!paymentMethod) {
+        if (!paymentMethod || paymentMethod.deleted) {
             throw new NotFoundException(`Payment Method with ID ${payment_method_id} not found`);
         }
 
