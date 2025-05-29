@@ -28,12 +28,11 @@ export class AdminController {
     @Get('dashboard-stats')
     getDashboardStats() {
         return this.adminService.getStatistics();
-    }
-
-    @Get('dashboard')
+    }    @Get('dashboard')
     getDashboardData() {
         return this.adminService.getDashboardData();
-    }    @Get('withdrawals')
+    }
+    @Get('withdrawals')
     getWithdrawals(
         @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
         @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,

@@ -16,7 +16,10 @@ export class AdminService {
             pendingWithdrawals
         ] = await Promise.all([
             this.prismaService.user.count({
-                where: { is_active: true }
+                where: { 
+                    is_active: true,
+                    role: { not: 'admin' }
+                }
             }),
             this.prismaService.playlist.count({
                 where: { deleted: false }
@@ -61,16 +64,17 @@ export class AdminService {
                 }
             },
             take: 10
-        });
-
-        // Get users by role
+        });        // Get users by role (excluding admins)
         const usersByRole = await this.prismaService.user.groupBy({
             by: ['role'],
-            where: { is_active: true },
+            where: { 
+                is_active: true,
+                role: { not: 'admin' }
+            },
             _count: {
                 user_id: true
             }
-        });        // Get submissions per month (last 12 months)
+        });// Get submissions per month (last 12 months)
         const submissionsPerMonth = await this.prismaService.$queryRaw`
             SELECT 
                 DATE_TRUNC('month', submitted_at) as month,
