@@ -55,8 +55,8 @@ export class AuthService {
             email,
             username,
             password_hash: passwordHash,
-            email_confirmed: false,
-            email_confirmation_token: emailConfirmationToken,
+            email_confirmed: registerDto.oauth_provider ? true : false, // Set email_confirmed to true for OAuth users
+            email_confirmation_token: registerDto.oauth_provider ? null : emailConfirmationToken, // No token needed for OAuth users
             oauth_provider: registerDto.oauth_provider,
             oauth_id: registerDto.oauth_id,
             created_at: new Date(),
