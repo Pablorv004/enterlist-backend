@@ -40,7 +40,10 @@ export class AdminService {
             GROUP BY DATE_TRUNC('month', created_at)
             ORDER BY month DESC
             LIMIT 12
-        `;
+        `.then((result: any[]) => result.map(row => ({
+            ...row,
+            count: Number(row.count)
+        })));
 
         // Get playlists by genre
         const playlistsByGenre = await this.prismaService.playlist.groupBy({
@@ -77,7 +80,10 @@ export class AdminService {
             GROUP BY DATE_TRUNC('month', submitted_at)
             ORDER BY month DESC
             LIMIT 12
-        `;        // Get playlists created per month (last 12 months)
+        `.then((result: any[]) => result.map(row => ({
+            ...row,
+            count: Number(row.count)
+        })));        // Get playlists created per month (last 12 months)
         const playlistsPerMonth = await this.prismaService.$queryRaw`
             SELECT 
                 DATE_TRUNC('month', created_at) as month,
@@ -88,7 +94,10 @@ export class AdminService {
             GROUP BY DATE_TRUNC('month', created_at)
             ORDER BY month DESC
             LIMIT 12
-        `;
+        `.then((result: any[]) => result.map(row => ({
+            ...row,
+            count: Number(row.count)
+        })));
 
         // Get revenue statistics
         const revenueStats = await this.prismaService.transaction.aggregate({
@@ -100,34 +109,32 @@ export class AdminService {
                 platform_fee: true,
                 creator_payout_amount: true
             }
-        });
-
-        return {
+        });        return {
             totals: {
-                users: totalUsers,
-                playlists: totalPlaylists,
-                songs: totalSongs,
-                submissions: totalSubmissions,
-                transactions: totalTransactions,
-                pendingWithdrawals
+                users: Number(totalUsers),
+                playlists: Number(totalPlaylists),
+                songs: Number(totalSongs),
+                submissions: Number(totalSubmissions),
+                transactions: Number(totalTransactions),
+                pendingWithdrawals: Number(pendingWithdrawals)
             },
             charts: {
                 usersPerMonth,
                 playlistsByGenre: playlistsByGenre.map(item => ({
                     genre: item.genre,
-                    count: item._count.playlist_id
+                    count: Number(item._count.playlist_id)
                 })),
                 usersByRole: usersByRole.map(item => ({
                     role: item.role,
-                    count: item._count.user_id
+                    count: Number(item._count.user_id)
                 })),
                 submissionsPerMonth,
                 playlistsPerMonth
             },
             revenue: {
-                totalRevenue: revenueStats._sum?.amount_total || 0,
-                totalFees: (revenueStats._sum?.platform_fee || 0),
-                totalPayouts: revenueStats._sum?.creator_payout_amount || 0
+                totalRevenue: Number(revenueStats._sum?.amount_total || 0),
+                totalFees: Number(revenueStats._sum?.platform_fee || 0),
+                totalPayouts: Number(revenueStats._sum?.creator_payout_amount || 0)
             }
         };
     }    async getDashboardData() {
@@ -220,11 +227,9 @@ export class AdminService {
                 }
             }),
             this.prismaService.withdrawal.count({ where })
-        ]);
-
-        return {
+        ]);        return {
             data: withdrawals,
-            total,
+            total: Number(total),
             skip,
             take
         };
