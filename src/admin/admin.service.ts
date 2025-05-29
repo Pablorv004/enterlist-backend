@@ -39,7 +39,7 @@ export class AdminService {
                 COUNT(*) as count
             FROM users
             WHERE created_at >= NOW() - INTERVAL '12 months'
-                AND is_active = true
+                AND is_active = true AND role != 'admin'
             GROUP BY DATE_TRUNC('month', created_at)
             ORDER BY month DESC
             LIMIT 12
