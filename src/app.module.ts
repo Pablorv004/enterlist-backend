@@ -18,6 +18,7 @@ import { PaypalAuthModule } from './paypal-auth/paypal-auth.module';
 import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { EmailModule } from './email/email.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({  imports: [
     ConfigModule,
@@ -31,6 +32,7 @@ import { EmailModule } from './email/email.module';
     SubmissionsModule,
     TransactionsModule,
     AdminActionsModule,
+    AdminModule,
     HealthModule,
     SpotifyAuthModule,
     YoutubeAuthModule,
