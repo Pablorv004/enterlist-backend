@@ -112,9 +112,7 @@ export class AuthService {
     }    private async hashPassword(password: string): Promise<string> {
         const saltRounds = 10;
         return bcrypt.hash(password, saltRounds);
-    }
-
-    generateToken(user: User) {
+    }    generateToken(user: User) {
         const payload = {
             sub: user.user_id,
             email: user.email,
@@ -128,6 +126,8 @@ export class AuthService {
                 username: user.username,
                 email: user.email,
                 role: user.role,
+                email_confirmed: user.email_confirmed,
+                oauth_provider: user.oauth_provider
             },
         };
     }
