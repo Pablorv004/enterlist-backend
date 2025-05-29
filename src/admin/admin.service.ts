@@ -29,9 +29,7 @@ export class AdminService {
             this.prismaService.withdrawal.count({
                 where: { status: 'pending' }
             })
-        ]);
-
-        // Get users registered per month (last 12 months)
+        ]);        // Get users registered per month (last 12 months)
         const usersPerMonth = await this.prismaService.$queryRaw`
             SELECT 
                 DATE_TRUNC('month', created_at) as month,
@@ -69,21 +67,17 @@ export class AdminService {
             _count: {
                 user_id: true
             }
-        });
-
-        // Get submissions per month (last 12 months)
+        });        // Get submissions per month (last 12 months)
         const submissionsPerMonth = await this.prismaService.$queryRaw`
             SELECT 
-                DATE_TRUNC('month', created_at) as month,
+                DATE_TRUNC('month', submitted_at) as month,
                 COUNT(*) as count
             FROM submissions
-            WHERE created_at >= NOW() - INTERVAL '12 months'
-            GROUP BY DATE_TRUNC('month', created_at)
+            WHERE submitted_at >= NOW() - INTERVAL '12 months'
+            GROUP BY DATE_TRUNC('month', submitted_at)
             ORDER BY month DESC
             LIMIT 12
-        `;
-
-        // Get playlists created per month (last 12 months)
+        `;        // Get playlists created per month (last 12 months)
         const playlistsPerMonth = await this.prismaService.$queryRaw`
             SELECT 
                 DATE_TRUNC('month', created_at) as month,
