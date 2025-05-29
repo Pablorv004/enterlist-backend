@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { LinkedAccountsService } from '../linked-accounts/linked-accounts.service';
@@ -679,15 +679,29 @@ export class SpotifyAuthService {
                             throw new BadRequestException(`Failed to fetch Spotify playlist ${playlistId}: ${error.message}`);
                         }),
                     ),
-                );
-
-                // Check if playlist already exists
+                );                // Check if playlist already exists
                 const existingPlaylist = await this.prismaService.playlist.findFirst({
                     where: {
                         platform_id: spotifyPlatform.platform_id,
                         platform_specific_id: playlistId,
                     },
+                    include: {
+                        creator: {
+                            select: {
+                                user_id: true,
+                                username: true,
+                                email: true,
+                            },
+                        },
+                    },
                 });
+
+                // If playlist exists and belongs to a different user, throw an error
+                if (existingPlaylist && existingPlaylist.creator_id !== userId) {
+                    throw new ConflictException(
+                        `Playlist "${existingPlaylist.name}" is already registered in our database by user ${existingPlaylist.creator.username} (${existingPlaylist.creator.email}). Please contact administrator help for assistance.`
+                    );
+                }
 
                 const playlistUpdateData = {
                     name: playlistData.name,
@@ -701,7 +715,7 @@ export class SpotifyAuthService {
                 };
 
                 if (existingPlaylist) {
-                    // Update existing playlist
+                    // Update existing playlist (only if it belongs to the current user)
                     const updatedPlaylist = await this.prismaService.playlist.update({
                         where: { playlist_id: existingPlaylist.playlist_id },
                         data: playlistUpdateData,
@@ -1041,14 +1055,29 @@ export class SpotifyAuthService {
                 for (const track of tracksData.tracks || []) {
                     if (!track) continue; // Skip null tracks
 
-                    try {
-                        // Check if song already exists
+                    try {                        // Check if song already exists
                         const existingSong = await this.prismaService.song.findFirst({
                             where: {
                                 platform_id: spotifyPlatform.platform_id,
                                 platform_specific_id: track.id,
                             },
+                            include: {
+                                artist: {
+                                    select: {
+                                        user_id: true,
+                                        username: true,
+                                        email: true,
+                                    },
+                                },
+                            },
                         });
+
+                        // If song exists and belongs to a different user, throw an error
+                        if (existingSong && existingSong.artist_id !== userId) {
+                            throw new ConflictException(
+                                `Song "${existingSong.title}" is already registered in our database by user ${existingSong.artist.username} (${existingSong.artist.email}). Please contact administrator help for assistance.`
+                            );
+                        }
 
                         const songUpdateData = {
                             title: track.name,

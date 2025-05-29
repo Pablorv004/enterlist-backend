@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { LinkedAccountsService } from '../linked-accounts/linked-accounts.service';
@@ -922,14 +922,28 @@ export class YoutubeAuthService {
                 for (const video of videosData.items || []) {
                     if (!video) continue; // Skip null videos
 
-                    try {
-                        // Check if song already exists
+                    try {                        // Check if song already exists
                         const existingSong = await this.prismaService.song.findFirst({
                             where: {
                                 platform_id: youtubePlatform.platform_id,
                                 platform_specific_id: video.id,
                             },
+                            include: {
+                                artist: {
+                                    select: {
+                                        username: true,
+                                        email: true,
+                                    },
+                                },
+                            },
                         });
+
+                        // Check ownership if song already exists
+                        if (existingSong && existingSong.artist_id !== userId) {
+                            throw new ConflictException(
+                                `Video '${video.snippet.title}' is already registered by user ${existingSong.artist.username} (${existingSong.artist.email})`
+                            );
+                        }
 
                         // Parse duration from ISO 8601 format (PT1M23S -> 83 seconds)
                         let durationMs: number | null = null;
