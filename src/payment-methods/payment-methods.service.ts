@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePaymentMethodDto, UpdatePaymentMethodDto } from './dto/payment-method.dto';
 import { v4 as uuidv4 } from 'uuid';
@@ -7,10 +7,11 @@ import { v4 as uuidv4 } from 'uuid';
 export class PaymentMethodsService {
     constructor(
         private readonly prismaService: PrismaService,
-    ) { }
-
-    async findAll() {
+    ) { }    async findAll() {
         const data = await this.prismaService.paymentMethod.findMany({
+            where: {
+                deleted: false
+            },
             select: {
                 payment_method_id: true,
                 user_id: true,
@@ -30,11 +31,12 @@ export class PaymentMethodsService {
         
         const total = data.length;
         return { data, total };
-    }
-
-    async findByUser(userId: string) {
+    }    async findByUser(userId: string) {
         const data = await this.prismaService.paymentMethod.findMany({
-            where: { user_id: userId },
+            where: { 
+                user_id: userId,
+                deleted: false
+            },
             select: {
                 payment_method_id: true,
                 type: true,
@@ -60,6 +62,7 @@ export class PaymentMethodsService {
                 is_default: true,
                 created_at: true,
                 updated_at: true,
+                deleted: true,
                 users: {
                     select: {
                         username: true,
@@ -69,7 +72,7 @@ export class PaymentMethodsService {
             },
         });
 
-        if (!paymentMethod) {
+        if (!paymentMethod || paymentMethod.deleted) {
             throw new NotFoundException(`Payment Method with ID ${id} not found`);
         }
 
@@ -157,22 +160,13 @@ export class PaymentMethodsService {
             where: { payment_method_id: id },
         });
 
-        if (!paymentMethod) {
+        if (!paymentMethod || paymentMethod.deleted) {
             throw new NotFoundException(`Payment Method with ID ${id} not found`);
         }
 
-        const transactionsCount = await this.prismaService.transaction.count({
+        return this.prismaService.paymentMethod.update({
             where: { payment_method_id: id },
-        });
-
-        if (transactionsCount > 0) {
-            throw new ConflictException(
-                `Cannot delete payment method with ID ${id} as it is used in ${transactionsCount} transactions`
-            );
-        }
-
-        return this.prismaService.paymentMethod.delete({
-            where: { payment_method_id: id },
+            data: { deleted: true },
         });
     }
 }

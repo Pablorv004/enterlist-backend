@@ -25,19 +25,12 @@ import { PaypalAuthService } from '../paypal-auth/paypal-auth.service';
 @Controller('api/payment-methods')
 @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
 export class PaymentMethodsController {
-    private readonly logger = new Logger(PaymentMethodsController.name);
-
-    constructor(
+    private readonly logger = new Logger(PaymentMethodsController.name);    constructor(
         private readonly paymentMethodsService: PaymentMethodsService,
         private readonly paypalAuthService: PaypalAuthService,
     ) {}
 
-    @UseGuards(RolesGuard)
-    @Roles(user_role.admin)
-    @Get()
-    findAll() {
-        return this.paymentMethodsService.findAll();
-    }    @UseGuards(OwnershipGuard)
+    @UseGuards(OwnershipGuard)
     @Ownership({ model: 'user', userField: 'user_id', paramName: 'userId' })
     @Get('user/:userId')
     findByUser(@Param('userId') userId: string) {

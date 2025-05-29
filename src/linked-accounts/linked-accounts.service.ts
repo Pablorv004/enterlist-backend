@@ -5,10 +5,11 @@ import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class LinkedAccountsService {
-    constructor(private readonly prismaService: PrismaService) { }
-
-    async findAll() {
+    constructor(private readonly prismaService: PrismaService) { }    async findAll() {
         const data = await this.prismaService.linkedAccount.findMany({
+            where: {
+                deleted: false
+            },
             include: {
                 user: {
                     select: {
@@ -21,11 +22,12 @@ export class LinkedAccountsService {
         });
 
         return { data };
-    }
-
-    async findByUser(userId: string) {
+    }    async findByUser(userId: string) {
         const data = await this.prismaService.linkedAccount.findMany({
-            where: { user_id: userId },
+            where: { 
+                user_id: userId,
+                deleted: false
+            },
             include: {
                 platform: true,
             },
@@ -46,9 +48,7 @@ export class LinkedAccountsService {
                 },
                 platform: true,
             },
-        });
-
-        if (!linkedAccount) {
+        });        if (!linkedAccount || linkedAccount.deleted) {
             throw new NotFoundException(`Linked Account with ID ${id} not found`);
         }
 
@@ -72,12 +72,11 @@ export class LinkedAccountsService {
 
         if (!platform) {
             throw new NotFoundException(`Platform with ID ${platform_id} not found`);
-        }
-
-        const existingLink = await this.prismaService.linkedAccount.findFirst({
+        }        const existingLink = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id,
                 platform_id,
+                deleted: false
             },
         });
 
@@ -107,13 +106,12 @@ export class LinkedAccountsService {
                 platform: true,
             },
         });
-    }
-
-    async remove(id: string) {
+    }    async remove(id: string) {
         await this.findOne(id);
 
-        return this.prismaService.linkedAccount.delete({
+        return this.prismaService.linkedAccount.update({
             where: { linked_account_id: id },
+            data: { deleted: true },
         });
     }
 }

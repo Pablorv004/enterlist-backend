@@ -4,20 +4,20 @@ import { CreatePlatformDto, UpdatePlatformDto } from './dto/platform.dto';
 
 @Injectable()
 export class PlatformsService {
-    constructor(private readonly prismaService: PrismaService) { }
-
-    async findAll() {
-        const data = await this.prismaService.platform.findMany();
+    constructor(private readonly prismaService: PrismaService) { }    async findAll() {
+        const data = await this.prismaService.platform.findMany({
+            where: {
+                deleted: false
+            }
+        });
         const total = data.length;
         return { data, total };
-    }
-
-    async findOne(id: number) {
+    }    async findOne(id: number) {
         const platform = await this.prismaService.platform.findUnique({
             where: { platform_id: id },
         });
 
-        if (!platform) {
+        if (!platform || platform.deleted) {
             throw new NotFoundException(`Platform with ID ${id} not found`);
         }
 
@@ -25,10 +25,8 @@ export class PlatformsService {
     }
 
     async create(createPlatformDto: CreatePlatformDto) {
-        const { name } = createPlatformDto;
-
-        const existingPlatform = await this.prismaService.platform.findFirst({
-            where: { name },
+        const { name } = createPlatformDto;        const existingPlatform = await this.prismaService.platform.findFirst({
+            where: { name, deleted: false },
         });
 
         if (existingPlatform) {
@@ -43,10 +41,10 @@ export class PlatformsService {
     async update(id: number, updatePlatformDto: UpdatePlatformDto) {
         await this.findOne(id);
 
-        if (updatePlatformDto.name) {
-            const existingPlatform = await this.prismaService.platform.findFirst({
+        if (updatePlatformDto.name) {            const existingPlatform = await this.prismaService.platform.findFirst({
                 where: {
                     name: updatePlatformDto.name,
+                    deleted: false,
                     NOT: { platform_id: id },
                 },
             });
@@ -60,9 +58,7 @@ export class PlatformsService {
             where: { platform_id: id },
             data: updatePlatformDto,
         });
-    }
-
-    async remove(id: number) {
+    }    async remove(id: number) {
         await this.findOne(id);
 
         const linkedResources = await this.prismaService.$transaction([
@@ -77,8 +73,9 @@ export class PlatformsService {
             );
         }
 
-        return this.prismaService.platform.delete({
+        return this.prismaService.platform.update({
             where: { platform_id: id },
+            data: { deleted: true },
         });
     }
 }
