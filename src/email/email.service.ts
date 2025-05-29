@@ -529,39 +529,4 @@ export class EmailService {
       context
     );
   }
-
-  async sendPasswordResetEmail(
-    userEmail: string,
-    userName: string,
-    resetToken: string
-  ): Promise<boolean> {
-    const resetUrl = `${this.frontendUrl}/reset-password?token=${resetToken}`;
-    
-    const context: EmailContext = {
-      title: 'Reset Your Password',
-      recipientName: userName,
-      resetUrl,
-      content: `
-        <p>You requested to reset your password for your Enterlist account.</p>
-        
-        <p>Click the button below to reset your password:</p>
-        
-        <a href="${resetUrl}" class="cta-button">Reset Password</a>
-        
-        <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
-        <p style="word-break: break-all; color: #666; font-size: 14px;">${resetUrl}</p>
-        
-        <p>This link will expire in 1 hour for security reasons.</p>
-        
-        <p>If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.</p>
-      `
-    };
-
-    return this.sendEmail(
-      userEmail,
-      'Reset Your Password - Enterlist',
-      'default',
-      context
-    );
-  }
 }
