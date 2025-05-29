@@ -46,20 +46,27 @@ export class SubmissionsService {
         ]);
 
         return { data, total, skip, take };
-    }
-
-    async findByArtist(artistId: string, skip = 0, take = 10) {
+    }    async findByArtist(artistId: string, skip = 0, take = 10) {
         const [data, total] = await Promise.all([
             this.prismaService.submission.findMany({
                 where: { artist_id: artistId },
                 skip,
                 take,
                 include: {
+                    artist: {
+                        select: {
+                            user_id: true,
+                            username: true,
+                            email: true,
+                        },
+                    },
                     playlist: {
                         select: {
+                            playlist_id: true,
                             name: true,
                             creator: {
                                 select: {
+                                    user_id: true,
                                     username: true,
                                 },
                             },
@@ -67,6 +74,7 @@ export class SubmissionsService {
                     },
                     song: {
                         select: {
+                            song_id: true,
                             title: true,
                             artist_name_on_platform: true,
                             url: true,
@@ -80,9 +88,7 @@ export class SubmissionsService {
         ]);
 
         return { data, total, skip, take };
-    }
-
-    async findByPlaylist(playlistId: string, skip = 0, take = 10, status?: submission_status) {
+    }    async findByPlaylist(playlistId: string, skip = 0, take = 10, status?: submission_status) {
         const [data, total] = await Promise.all([
             this.prismaService.submission.findMany({
                 where: { playlist_id: playlistId, ...(status ? { status } : {}) },
@@ -91,11 +97,14 @@ export class SubmissionsService {
                 include: {
                     artist: {
                         select: {
+                            user_id: true,
                             username: true,
+                            email: true,
                         },
                     },
                     song: {
                         select: {
+                            song_id: true,
                             title: true,
                             artist_name_on_platform: true,
                             url: true,
@@ -109,9 +118,7 @@ export class SubmissionsService {
         ]);
 
         return { data, total, skip, take };
-    }
-
-    async findByCreator(creatorId: string, skip = 0, take = 10, status?: submission_status, playlistId?: string) {
+    }    async findByCreator(creatorId: string, skip = 0, take = 10, status?: submission_status, playlistId?: string, artistId?: string) {
         const where: any = { 
             playlist: { creator_id: creatorId } 
         };
@@ -126,6 +133,11 @@ export class SubmissionsService {
             where.playlist_id = playlistId;
         }
 
+        // Add artist filter if provided
+        if (artistId) {
+            where.artist_id = artistId;
+        }
+
         const [data, total] = await Promise.all([
             this.prismaService.submission.findMany({
                 where,
@@ -134,17 +146,20 @@ export class SubmissionsService {
                 include: {
                     artist: {
                         select: {
+                            user_id: true,
                             username: true,
                             email: true,
                         },
                     },
                     playlist: {
                         select: {
+                            playlist_id: true,
                             name: true,
                         },
                     },
                     song: {
                         select: {
+                            song_id: true,
                             title: true,
                             artist_name_on_platform: true,
                             url: true,

@@ -58,7 +58,23 @@ export class OwnershipGuard implements CanActivate {
                 }
                 
                 return playlist.creator_id === user.user_id;
-            }            // For resource-specific endpoints like /:id
+            }            if (model === 'submission') {
+                // For submissions, allow access if user is either the artist OR the playlist creator
+                const submission = await this.prismaService.submission.findUnique({
+                    where: { submission_id: resourceId },
+                    include: { 
+                        playlist: { select: { creator_id: true } }
+                    },
+                });
+
+                if (!submission) {
+                    throw new ForbiddenException('Submission not found');
+                }
+
+                // Allow access if user is the artist who submitted OR the playlist creator
+                return submission.artist_id === user.user_id || submission.playlist.creator_id === user.user_id;
+            }
+
             if (model === 'transaction') {
                 // For transactions, check ownership through submission's artist_id
                 const transaction = await this.prismaService.transaction.findUnique({
