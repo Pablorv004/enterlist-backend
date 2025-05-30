@@ -770,4 +770,173 @@ export class AdminService {
 
         return platform;
     }
+
+    // Admin Linked Accounts Management
+    async getLinkedAccounts(skip = 0, take = 10) {
+        const [linkedAccounts, total] = await Promise.all([
+            this.prismaService.linkedAccount.findMany({
+                where: { deleted: false },
+                skip,
+                take,
+                orderBy: { created_at: 'desc' },
+                include: {
+                    user: {
+                        select: {
+                            user_id: true,
+                            username: true,
+                            email: true
+                        }
+                    },
+                    platform: true
+                }
+            }),
+            this.prismaService.linkedAccount.count({ 
+                where: { deleted: false }
+            })
+        ]);
+
+        return {
+            data: linkedAccounts,
+            total: Number(total),
+            skip,
+            take
+        };
+    }
+
+    async getLinkedAccount(linkedAccountId: string) {
+        const linkedAccount = await this.prismaService.linkedAccount.findUnique({
+            where: { linked_account_id: linkedAccountId },
+            include: {
+                user: {
+                    select: {
+                        user_id: true,
+                        username: true,
+                        email: true
+                    }
+                },
+                platform: true
+            }
+        });
+
+        if (!linkedAccount || linkedAccount.deleted) {
+            throw new Error('Linked account not found');
+        }
+
+        return linkedAccount;
+    }
+
+    async updateLinkedAccount(linkedAccountId: string, linkedAccountData: any) {
+        const linkedAccount = await this.prismaService.linkedAccount.update({
+            where: { linked_account_id: linkedAccountId },
+            data: {
+                ...linkedAccountData,
+                updated_at: new Date()
+            },
+            include: {
+                user: {
+                    select: {
+                        user_id: true,
+                        username: true,
+                        email: true
+                    }
+                },
+                platform: true
+            }
+        });
+
+        return linkedAccount;
+    }
+
+    async deleteLinkedAccount(linkedAccountId: string) {
+        // Soft delete by setting deleted flag to true
+        const linkedAccount = await this.prismaService.linkedAccount.update({
+            where: { linked_account_id: linkedAccountId },
+            data: { deleted: true }
+        });
+
+        return linkedAccount;
+    }
+
+    // Admin Payment Methods Management
+    async getPaymentMethods(skip = 0, take = 10) {
+        const [paymentMethods, total] = await Promise.all([
+            this.prismaService.paymentMethod.findMany({
+                where: { deleted: false },
+                skip,
+                take,
+                orderBy: { created_at: 'desc' },
+                include: {
+                    users: {
+                        select: {
+                            user_id: true,
+                            username: true,
+                            email: true
+                        }
+                    }
+                }
+            }),
+            this.prismaService.paymentMethod.count({ 
+                where: { deleted: false }
+            })
+        ]);
+
+        return {
+            data: paymentMethods,
+            total: Number(total),
+            skip,
+            take
+        };
+    }
+
+    async getPaymentMethod(paymentMethodId: string) {
+        const paymentMethod = await this.prismaService.paymentMethod.findUnique({
+            where: { payment_method_id: paymentMethodId },
+            include: {
+                users: {
+                    select: {
+                        user_id: true,
+                        username: true,
+                        email: true
+                    }
+                }
+            }
+        });
+
+        if (!paymentMethod || paymentMethod.deleted) {
+            throw new Error('Payment method not found');
+        }
+
+        return paymentMethod;
+    }
+
+    async updatePaymentMethod(paymentMethodId: string, paymentMethodData: any) {
+        const paymentMethod = await this.prismaService.paymentMethod.update({
+            where: { payment_method_id: paymentMethodId },
+            data: {
+                ...paymentMethodData,
+                updated_at: new Date()
+            },
+            include: {
+                users: {
+                    select: {
+                        user_id: true,
+                        username: true,
+                        email: true
+                    }
+                }
+            }
+        });
+
+        return paymentMethod;
+    }
+
+    async deletePaymentMethod(paymentMethodId: string) {
+        // Soft delete by setting deleted flag to true
+        const paymentMethod = await this.prismaService.paymentMethod.update({
+            where: { payment_method_id: paymentMethodId },
+            data: { deleted: true }
+        });
+
+        return paymentMethod;
+    }
 }

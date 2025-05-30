@@ -216,4 +216,52 @@ export class AdminController {
     deletePlatform(@Param('id', ParseIntPipe) id: number) {
         return this.adminService.deletePlatform(id);
     }
+
+    // Admin Linked Accounts Management
+    @Get('linked-accounts')
+    getLinkedAccounts(
+        @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
+        @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
+    ) {
+        return this.adminService.getLinkedAccounts(skip, take);
+    }
+
+    @Get('linked-accounts/:id')
+    getLinkedAccount(@Param('id') id: string) {
+        return this.adminService.getLinkedAccount(id);
+    }
+
+    @Put('linked-accounts/:id')
+    updateLinkedAccount(@Param('id') id: string, @Body() linkedAccountData: any) {
+        return this.adminService.updateLinkedAccount(id, linkedAccountData);
+    }
+
+    @Delete('linked-accounts/:id')
+    deleteLinkedAccount(@Param('id') id: string) {
+        return this.adminService.deleteLinkedAccount(id);
+    }
+
+    // Admin Payment Methods Management
+    @Get('payment-methods')
+    getPaymentMethods(
+        @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
+        @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
+    ) {
+        return this.adminService.getPaymentMethods(skip, take);
+    }
+
+    @Get('payment-methods/:id')
+    getPaymentMethod(@Param('id') id: string) {
+        return this.adminService.getPaymentMethod(id);
+    }
+
+    @Put('payment-methods/:id')
+    updatePaymentMethod(@Param('id') id: string, @Body() paymentMethodData: any) {
+        return this.adminService.updatePaymentMethod(id, paymentMethodData);
+    }
+
+    @Delete('payment-methods/:id')
+    deletePaymentMethod(@Param('id') id: string) {
+        return this.adminService.deletePaymentMethod(id);
+    }
 }
