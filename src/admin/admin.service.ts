@@ -2,6 +2,89 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { submission_status, transaction_status } from '@prisma/client';
 
+// Helper functions to filter data for Prisma operations
+const filterPlaylistUpdateData = (data: any) => {
+    const allowedFields = [
+        'name', 'description', 'url', 'cover_image_url', 'is_visible', 
+        'genre', 'submission_fee', 'track_count', 'deleted'
+    ];
+    const filtered = {};
+    allowedFields.forEach(field => {
+        if (data[field] !== undefined) {
+            filtered[field] = data[field];
+        }
+    });
+    return filtered;
+};
+
+const filterSongUpdateData = (data: any) => {
+    const allowedFields = [
+        'title', 'artist_name_on_platform', 'album_name', 'url', 
+        'cover_image_url', 'duration_ms', 'is_visible', 'deleted'
+    ];
+    const filtered = {};
+    allowedFields.forEach(field => {
+        if (data[field] !== undefined) {
+            filtered[field] = data[field];
+        }
+    });
+    return filtered;
+};
+
+const filterUserUpdateData = (data: any) => {
+    const allowedFields = [
+        'username', 'email', 'role', 'is_active', 'email_confirmed', 'deleted'
+    ];
+    const filtered = {};
+    allowedFields.forEach(field => {
+        if (data[field] !== undefined) {
+            filtered[field] = data[field];
+        }
+    });
+    return filtered;
+};
+
+const filterSubmissionUpdateData = (data: any) => {
+    const allowedFields = [
+        'status', 'submission_message', 'review_feedback', 'reviewed_at', 'deleted'
+    ];
+    const filtered = {};
+    allowedFields.forEach(field => {
+        if (data[field] !== undefined) {
+            filtered[field] = data[field];
+        }
+    });
+    return filtered;
+};
+
+const filterLinkedAccountUpdateData = (data: any) => {
+    const allowedFields = [
+        'platform_access_token', 'platform_refresh_token', 'platform_token_expires_at',
+        'platform_user_id', 'platform_user_name', 'is_active', 'deleted'
+    ];
+    const filtered = {};
+    allowedFields.forEach(field => {
+        if (data[field] !== undefined) {
+            filtered[field] = data[field];
+        }
+    });
+    return filtered;
+};
+
+const filterPaymentMethodUpdateData = (data: any) => {
+    const allowedFields = [
+        'method_type', 'provider', 'provider_payment_method_id', 'is_default',
+        'card_last_four', 'card_brand', 'expiry_month', 'expiry_year', 'deleted'
+    ];
+    const filtered = {};
+    allowedFields.forEach(field => {
+        if (data[field] !== undefined) {
+            filtered[field] = data[field];
+        }
+    });
+    return filtered;
+};
+
 @Injectable()
 export class AdminService {
     constructor(private readonly prismaService: PrismaService) { }
@@ -373,12 +456,19 @@ export class AdminService {
         }
 
         return user;
-    }
+    }    async updateUser(userId: string, userData: any) {
+        const filteredData = filterUserUpdateData(userData);
+        
+        if (Object.keys(filteredData).length === 0) {
+            throw new Error('No valid fields provided for update');
+        }
 
-    async updateUser(userId: string, userData: any) {
         const user = await this.prismaService.user.update({
             where: { user_id: userId },
-            data: userData,
+            data: {
+                ...filteredData,
+                updated_at: new Date()
+            },
             select: {
                 user_id: true,
                 username: true,
@@ -419,9 +509,7 @@ export class AdminService {
         });
 
         return user;
-    }
-
-    // Admin Playlist Management
+    }    // Admin Playlist Management
     async getPlaylists(skip = 0, take = 10) {
         const [playlists, total] = await Promise.all([
             this.prismaService.playlist.findMany({
@@ -432,6 +520,9 @@ export class AdminService {
                 include: {
                     creator: {
                         select: { username: true, email: true }
+                    },
+                    platform: {
+                        select: { name: true, platform_id: true }
                     },
                     _count: {
                         select: {
@@ -449,14 +540,15 @@ export class AdminService {
             skip,
             take
         };
-    }
-
-    async getPlaylist(playlistId: string) {
+    }    async getPlaylist(playlistId: string) {
         const playlist = await this.prismaService.playlist.findUnique({
             where: { playlist_id: playlistId },
             include: {
                 creator: {
                     select: { username: true, email: true }
+                },
+                platform: {
+                    select: { name: true, platform_id: true }
                 },
                 _count: {
                     select: {
@@ -471,12 +563,19 @@ export class AdminService {
         }
 
         return playlist;
-    }
+    }async updatePlaylist(playlistId: string, playlistData: any) {
+        const filteredData = filterPlaylistUpdateData(playlistData);
+        
+        if (Object.keys(filteredData).length === 0) {
+            throw new Error('No valid fields provided for update');
+        }
 
-    async updatePlaylist(playlistId: string, playlistData: any) {
         const playlist = await this.prismaService.playlist.update({
             where: { playlist_id: playlistId },
-            data: playlistData,
+            data: {
+                ...filteredData,
+                updated_at: new Date()
+            },
         });
 
         return playlist;
@@ -497,9 +596,7 @@ export class AdminService {
 
     async unflagPlaylist(playlistId: string) {
         return { message: 'Playlist unflagged successfully' };
-    }
-
-    // Admin Song Management
+    }    // Admin Song Management
     async getSongs(skip = 0, take = 10) {
         const [songs, total] = await Promise.all([
             this.prismaService.song.findMany({
@@ -510,6 +607,9 @@ export class AdminService {
                 include: {
                     artist: {
                         select: { username: true, email: true }
+                    },
+                    platform: {
+                        select: { name: true, platform_id: true }
                     },
                     _count: {
                         select: {
@@ -527,14 +627,15 @@ export class AdminService {
             skip,
             take
         };
-    }
-
-    async getSong(songId: string) {
+    }    async getSong(songId: string) {
         const song = await this.prismaService.song.findUnique({
             where: { song_id: songId },
             include: {
                 artist: {
                     select: { username: true, email: true }
+                },
+                platform: {
+                    select: { name: true, platform_id: true }
                 },
                 submissions: {
                     include: {
@@ -556,12 +657,19 @@ export class AdminService {
         }
 
         return song;
-    }
+    }    async updateSong(songId: string, songData: any) {
+        const filteredData = filterSongUpdateData(songData);
+        
+        if (Object.keys(filteredData).length === 0) {
+            throw new Error('No valid fields provided for update');
+        }
 
-    async updateSong(songId: string, songData: any) {
         const song = await this.prismaService.song.update({
             where: { song_id: songId },
-            data: songData,
+            data: {
+                ...filteredData,
+                updated_at: new Date()
+            },
         });
 
         return song;
@@ -639,12 +747,16 @@ export class AdminService {
         }
 
         return submission;
-    }
+    }    async updateSubmission(submissionId: string, submissionData: any) {
+        const filteredData = filterSubmissionUpdateData(submissionData);
+        
+        if (Object.keys(filteredData).length === 0) {
+            throw new Error('No valid fields provided for update');
+        }
 
-    async updateSubmission(submissionId: string, submissionData: any) {
         const submission = await this.prismaService.submission.update({
             where: { submission_id: submissionId },
-            data: submissionData,
+            data: filteredData,
         });
 
         return submission;
@@ -823,15 +935,16 @@ export class AdminService {
         }
 
         return linkedAccount;
-    }
+    }    async updateLinkedAccount(linkedAccountId: string, linkedAccountData: any) {
+        const filteredData = filterLinkedAccountUpdateData(linkedAccountData);
+        
+        if (Object.keys(filteredData).length === 0) {
+            throw new Error('No valid fields provided for update');
+        }
 
-    async updateLinkedAccount(linkedAccountId: string, linkedAccountData: any) {
         const linkedAccount = await this.prismaService.linkedAccount.update({
             where: { linked_account_id: linkedAccountId },
-            data: {
-                ...linkedAccountData,
-                updated_at: new Date()
-            },
+            data: filteredData,
             include: {
                 user: {
                     select: {
@@ -907,15 +1020,16 @@ export class AdminService {
         }
 
         return paymentMethod;
-    }
+    }    async updatePaymentMethod(paymentMethodId: string, paymentMethodData: any) {
+        const filteredData = filterPaymentMethodUpdateData(paymentMethodData);
+        
+        if (Object.keys(filteredData).length === 0) {
+            throw new Error('No valid fields provided for update');
+        }
 
-    async updatePaymentMethod(paymentMethodId: string, paymentMethodData: any) {
         const paymentMethod = await this.prismaService.paymentMethod.update({
             where: { payment_method_id: paymentMethodId },
-            data: {
-                ...paymentMethodData,
-                updated_at: new Date()
-            },
+            data: filteredData,
             include: {
                 users: {
                     select: {
