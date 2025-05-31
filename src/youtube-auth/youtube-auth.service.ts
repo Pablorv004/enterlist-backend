@@ -16,6 +16,7 @@ export class YoutubeAuthService {
     private readonly clientSecret: string;
     private readonly apiKey: string;
     private readonly redirectUri: string;
+    private readonly mobileRedirectUri: string;
     private readonly stateMap = new Map<string, { userId?: string; expiresAt: Date; isNewUser?: boolean }>();
 
     constructor(
@@ -32,9 +33,10 @@ export class YoutubeAuthService {
         // In production, this would come from environment variables or config
         const apiBaseUrl = this.configService.get<string>('API_BASE_URL') || 'http://localhost:3000';
         this.redirectUri = `${apiBaseUrl}/api/auth/youtube/callback`;
+        this.mobileRedirectUri = `${apiBaseUrl}/api/auth/youtube/mobile-callback`;
     }
 
-    async getAuthorizationUrl(userId?: string): Promise<string> {
+    async getAuthorizationUrl(userId?: string, isMobile?: boolean): Promise<string> {
         // Generate a random state parameter to prevent CSRF
         const state = crypto.randomBytes(16).toString('hex');
 
@@ -59,18 +61,21 @@ export class YoutubeAuthService {
             'https://www.googleapis.com/auth/userinfo.profile'
         ].join(' ');
 
-        // Construct the YouTube/Google authorization URL
+        // Use appropriate redirect URI based on platform
+        const redirectUri = isMobile ? this.mobileRedirectUri : this.redirectUri;
+
+        // Construct the YouTube authorization URL
         const params = new URLSearchParams({
             client_id: this.clientId,
+            redirect_uri: redirectUri,
             response_type: 'code',
-            redirect_uri: this.redirectUri,
-            state,
             scope,
+            state,
             access_type: 'offline',
             prompt: 'consent'
         });
 
-        return `https://accounts.google.com/o/oauth2/auth?${params.toString()}`;
+        return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
     }
 
     async handleCallback(code: string, state: string): Promise<any> {

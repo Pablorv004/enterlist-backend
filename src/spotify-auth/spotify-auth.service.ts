@@ -11,10 +11,10 @@ import { AuthService } from '../auth/auth.service';
 import { user_role } from '@prisma/client';
 
 @Injectable()
-export class SpotifyAuthService {
-    private readonly clientId: string;
+export class SpotifyAuthService {    private readonly clientId: string;
     private readonly clientSecret: string;
     private readonly redirectUri: string;
+    private readonly mobileRedirectUri: string;
     private readonly stateMap = new Map<string, { userId?: string; expiresAt: Date; isNewUser?: boolean }>();
 
     constructor(
@@ -30,9 +30,10 @@ export class SpotifyAuthService {
 
         const apiBaseUrl = this.configService.get<string>('API_BASE_URL') || 'http://localhost:3000';
         this.redirectUri = `${apiBaseUrl}/api/auth/spotify/callback`;
+        this.mobileRedirectUri = `${apiBaseUrl}/api/auth/spotify/mobile-callback`;
     }
 
-    async getAuthorizationUrl(userId?: string): Promise<string> {
+    async getAuthorizationUrl(userId?: string, isMobile?: boolean): Promise<string> {
         // Generate a random state parameter to prevent CSRF
         const state = crypto.randomBytes(16).toString('hex');
 
@@ -49,9 +50,7 @@ export class SpotifyAuthService {
         });
 
         // Clean up expired states
-        this.cleanExpiredStates();
-
-        const scope = [
+        this.cleanExpiredStates();        const scope = [
             'user-read-private',
             'user-read-email',
             'playlist-read-private',
@@ -59,11 +58,14 @@ export class SpotifyAuthService {
             'user-library-read'
         ].join(' ');
 
+        // Use appropriate redirect URI based on platform
+        const redirectUri = isMobile ? this.mobileRedirectUri : this.redirectUri;
+
         // Construct the Spotify authorization URL
         const params = new URLSearchParams({
             client_id: this.clientId,
             response_type: 'code',
-            redirect_uri: this.redirectUri,
+            redirect_uri: redirectUri,
             state,
             scope,
         });

@@ -17,10 +17,11 @@ export class PaypalAuthController {
         return res.redirect(authUrl);
     }    @Get('login-url')
     @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
-    async getLoginUrl(@Req() req) {
-        const authUrl = await this.paypalAuthService.getAuthorizationUrl(req.user.user_id);
+    async getLoginUrl(@Req() req, @Query('mobile') mobile?: string) {
+        const isMobile = mobile === 'true';
+        const authUrl = await this.paypalAuthService.getAuthorizationUrl(req.user.user_id, isMobile);
         return { url: authUrl };
-    }    @Get('callback')
+    }@Get('callback')
     async callback(
         @Query('code') code: string,
         @Query('state') state: string,
@@ -248,5 +249,37 @@ export class PaypalAuthController {
             redirectUri: this.paypalAuthService['redirectUri'],
             baseUrl: this.paypalAuthService['baseUrl']
         };
+    }
+
+    @Get('mobile-callback')
+    async mobileCallback(
+        @Query('code') code: string,
+        @Query('state') state: string,
+        @Query('error') error: string,
+        @Req() req,
+        @Res() res: Response,
+    ) {
+        if (error) {
+            return res.redirect(`com.enterlist.app://oauth/error?error=${encodeURIComponent(error)}&provider=paypal`);
+        }
+
+        try {
+            const result = await this.paypalAuthService.handleCallback(code, state);
+            
+            const params = new URLSearchParams({
+                access_token: result.access_token,
+                user: JSON.stringify(result.user),
+                status: 'success',
+                provider: 'paypal',
+                isNewUser: result.isNewUser?.toString() || 'false',
+                needsRoleSelection: result.needsRoleSelection?.toString() || 'false'
+            });
+
+            return res.redirect(`com.enterlist.app://oauth/callback?${params.toString()}`);
+        } catch (err) {
+            console.error('PayPal Mobile OAuth Error:', err);
+            const errorMessage = err.message || 'Authentication failed';
+            return res.redirect(`com.enterlist.app://oauth/error?error=${encodeURIComponent(errorMessage)}&provider=paypal`);
+        }
     }
 }

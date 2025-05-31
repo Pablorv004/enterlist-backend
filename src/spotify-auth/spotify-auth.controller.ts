@@ -18,8 +18,9 @@ export class SpotifyAuthController {
         return res.redirect(authUrl);
     }    @Get('login-url')
     @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
-    async getLoginUrl(@Req() req) {
-        const authUrl = await this.spotifyAuthService.getAuthorizationUrl(req.user.user_id);
+    async getLoginUrl(@Req() req, @Query('mobile') mobile?: string) {
+        const isMobile = mobile === 'true';
+        const authUrl = await this.spotifyAuthService.getAuthorizationUrl(req.user.user_id, isMobile);
         return { url: authUrl };
     }
 
@@ -33,24 +34,18 @@ export class SpotifyAuthController {
         @Query('code') code: string,
         @Query('state') state: string,
         @Query('error') error: string,
-        @Query('mobile') mobile: string,
         @Req() req,
         @Res() res: Response,
     ) {
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
-        const isMobile = mobile === 'true' || req.headers['user-agent']?.includes('Capacitor');
         
         if (error) {
-            if (isMobile) {
-                return res.redirect(`enterlist://oauth/error?error=${encodeURIComponent(error)}`);
-            }
             return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(error)}`);
         }
 
         try {
             const result = await this.spotifyAuthService.handleCallback(code, state);
             
-            // Create common parameters for both mobile and web
             const params = new URLSearchParams({
                 access_token: result.access_token,
                 user: JSON.stringify(result.user),
@@ -59,25 +54,44 @@ export class SpotifyAuthController {
                 isNewUser: result.isNewUser?.toString() || 'false',
                 needsRoleSelection: result.needsRoleSelection?.toString() || 'false'
             });
-            
-            if (isMobile) {
-                // For mobile, redirect with tokens in URL parameters
-                return res.redirect(`enterlist://oauth/callback?${params.toString()}`);
-            }
-            
-            // Web flow - use query parameters instead of cookies
-            // Check if this is a new user or existing user that needs role selection
-            if (result.isNewUser || result.needsRoleSelection) {
-                return res.redirect(`${frontendUrl}/role-selection?${params.toString()}`);
-            }
-            
-            // If existing user with role, go to dashboard
-            return res.redirect(`${frontendUrl}/dashboard?${params.toString()}`);
+
+            return res.redirect(`${frontendUrl}/oauth/callback?${params.toString()}`);
         } catch (err) {
-            if (isMobile) {
-                return res.redirect(`enterlist://oauth/error?error=${encodeURIComponent(err.message)}`);
-            }
-            return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(err.message)}`);
+            console.error('Spotify OAuth Error:', err);
+            const errorMessage = err.message || 'Authentication failed';
+            return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(errorMessage)}`);
+        }
+    }
+
+    @Get('mobile-callback')
+    async mobileCallback(
+        @Query('code') code: string,
+        @Query('state') state: string,
+        @Query('error') error: string,
+        @Req() req,
+        @Res() res: Response,
+    ) {
+        if (error) {
+            return res.redirect(`com.enterlist.app://oauth/error?error=${encodeURIComponent(error)}&provider=spotify`);
+        }
+
+        try {
+            const result = await this.spotifyAuthService.handleCallback(code, state);
+            
+            const params = new URLSearchParams({
+                access_token: result.access_token,
+                user: JSON.stringify(result.user),
+                status: 'success',
+                provider: 'spotify',
+                isNewUser: result.isNewUser?.toString() || 'false',
+                needsRoleSelection: result.needsRoleSelection?.toString() || 'false'
+            });
+
+            return res.redirect(`com.enterlist.app://oauth/callback?${params.toString()}`);
+        } catch (err) {
+            console.error('Spotify Mobile OAuth Error:', err);
+            const errorMessage = err.message || 'Authentication failed';
+            return res.redirect(`com.enterlist.app://oauth/error?error=${encodeURIComponent(errorMessage)}&provider=spotify`);
         }
     }    @Get('playlists')
     @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)

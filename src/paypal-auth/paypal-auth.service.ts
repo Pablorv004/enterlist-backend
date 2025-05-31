@@ -12,6 +12,7 @@ export class PaypalAuthService {
     private readonly clientId: string;
     private readonly clientSecret: string;
     private readonly redirectUri: string;
+    private readonly mobileRedirectUri: string;
     private readonly environment: string;
     private readonly baseUrl: string;
     private readonly stateMap = new Map<string, { userId?: string; expiresAt: Date; isNewUser?: boolean; isPopup?: boolean }>();
@@ -26,7 +27,10 @@ export class PaypalAuthService {
         this.baseUrl = this.environment === 'live' 
             ? 'https://api.paypal.com' 
             : 'https://api.sandbox.paypal.com';
-        this.redirectUri = `${this.configService.get<string>('API_BASE_URL')}/api/auth/paypal/callback`;
+        
+        const apiBaseUrl = this.configService.get<string>('API_BASE_URL');
+        this.redirectUri = `${apiBaseUrl}/api/auth/paypal/callback`;
+        this.mobileRedirectUri = `${apiBaseUrl}/api/auth/paypal/mobile-callback`;
 
         if (!this.clientId || !this.clientSecret) {
             this.logger.warn('PayPal OAuth client ID or secret is missing');
@@ -34,10 +38,11 @@ export class PaypalAuthService {
             this.logger.log(`PayPal OAuth service initialized in ${this.environment} mode`);
             this.logger.log(`PayPal Client ID: ${this.clientId}`);
             this.logger.log(`PayPal Redirect URI: ${this.redirectUri}`);
+            this.logger.log(`PayPal Mobile Redirect URI: ${this.mobileRedirectUri}`);
         }
     }
 
-    async getAuthorizationUrl(userId?: string, isPopup?: boolean): Promise<string> {
+    async getAuthorizationUrl(userId?: string, isMobile?: boolean, isPopup?: boolean): Promise<string> {
         const state = crypto.randomBytes(32).toString('hex');
         
         // Store state with expiration (15 minutes)
@@ -48,10 +53,12 @@ export class PaypalAuthService {
             userId,
             expiresAt,
             isNewUser: !userId, // If no userId provided, this is a new user registration
+            isPopup
         });
 
         // Clean up expired states
-        this.cleanupExpiredStates();        
+        this.cleanupExpiredStates();
+        
         const scopes = [
             'openid',
             'email',
@@ -66,7 +73,7 @@ export class PaypalAuthService {
         authUrl.searchParams.set('client_id', this.clientId);
         authUrl.searchParams.set('response_type', 'code');
         authUrl.searchParams.set('scope', scopes);
-        authUrl.searchParams.set('redirect_uri', this.redirectUri);
+        authUrl.searchParams.set('redirect_uri', isMobile ? this.mobileRedirectUri : this.redirectUri);
         authUrl.searchParams.set('state', state);
 
         this.logger.log(`Generated PayPal OAuth URL: ${authUrl.toString()}`);
