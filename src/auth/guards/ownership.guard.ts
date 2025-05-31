@@ -87,9 +87,7 @@ export class OwnershipGuard implements CanActivate {
                 }
 
                 return transaction.submission.artist_id === user.user_id;
-            }
-
-            if (model === 'paymentMethod') {
+            }            if (model === 'paymentMethod') {
                 // For payment methods, use the correct table name
                 const paymentMethod = await this.prismaService.paymentMethod.findUnique({
                     where: { payment_method_id: resourceId },
@@ -101,6 +99,20 @@ export class OwnershipGuard implements CanActivate {
                 }
 
                 return paymentMethod[userField] === user.user_id;
+            }
+
+            if (model === 'linkedAccount') {
+                // For linked accounts, use the correct table name and field
+                const linkedAccount = await this.prismaService.linkedAccount.findUnique({
+                    where: { linked_account_id: resourceId },
+                    select: { [userField]: true },
+                });
+
+                if (!linkedAccount) {
+                    throw new ForbiddenException('Linked account not found');
+                }
+
+                return linkedAccount[userField] === user.user_id;
             }
 
             const resource = await this.prismaService[model].findUnique({
