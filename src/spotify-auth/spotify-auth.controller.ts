@@ -22,14 +22,15 @@ export class SpotifyAuthController {
         const isMobile = mobile === 'true';
         const authUrl = await this.spotifyAuthService.getAuthorizationUrl(req.user.user_id, isMobile);
         return { url: authUrl };
-    }
-
+    }    
     @Get('register-or-login')
-    async registerOrLogin(@Res() res: Response) {
+    async registerOrLogin(@Res() res: Response, @Query('mobile') mobile?: string) {
         // This endpoint doesn't require authentication as it's for new users
-        const authUrl = await this.spotifyAuthService.getAuthorizationUrl();
+        const isMobile = mobile === 'true';
+        const authUrl = await this.spotifyAuthService.getAuthorizationUrl(undefined, isMobile);
         return res.redirect(authUrl);
-    }    @Get('callback')
+    }
+    @Get('callback')
     async callback(
         @Query('code') code: string,
         @Query('state') state: string,
