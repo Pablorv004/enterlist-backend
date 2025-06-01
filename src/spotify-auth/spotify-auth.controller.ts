@@ -29,18 +29,24 @@ export class SpotifyAuthController {
         const isMobile = mobile === 'true';
         const authUrl = await this.spotifyAuthService.getAuthorizationUrl(undefined, isMobile);
         return res.redirect(authUrl);
-    }
-    @Get('callback')
+    }    @Get('callback')
     async callback(
         @Query('code') code: string,
         @Query('state') state: string,
         @Query('error') error: string,
+        @Query('mobile') mobile: string,
         @Req() req,
         @Res() res: Response,
     ) {
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
         
+        // Detect if this is a mobile request
+        const isMobile = mobile === 'true' || req.headers['user-agent']?.includes('Capacitor');
+        
         if (error) {
+            if (isMobile) {
+                return res.redirect(`com.enterlist.app://oauth/error?error=${encodeURIComponent(error)}&provider=spotify`);
+            }
             return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(error)}`);
         }
 
@@ -56,10 +62,19 @@ export class SpotifyAuthController {
                 needsRoleSelection: result.needsRoleSelection?.toString() || 'false'
             });
 
+            if (isMobile) {
+                return res.redirect(`com.enterlist.app://oauth/callback?${params.toString()}`);
+            }
+            
             return res.redirect(`${frontendUrl}/oauth/callback?${params.toString()}`);
         } catch (err) {
             console.error('Spotify OAuth Error:', err);
             const errorMessage = err.message || 'Authentication failed';
+            
+            if (isMobile) {
+                return res.redirect(`com.enterlist.app://oauth/error?error=${encodeURIComponent(errorMessage)}&provider=spotify`);
+            }
+            
             return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(errorMessage)}`);
         }
     }
