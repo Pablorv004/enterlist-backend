@@ -11,24 +11,31 @@ export class YoutubeAuthController {
     constructor(
         private readonly youtubeAuthService: YoutubeAuthService,
         private readonly configService: ConfigService
-    ) { }    @Get('login')
+    ) { }    
+    
+    @Get('login')
     @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
     async login(@Req() req, @Res() res: Response) {
         const authUrl = await this.youtubeAuthService.getAuthorizationUrl(req.user.user_id);
         return res.redirect(authUrl);
-    }    @Get('login-url')
+    }    
+    
+    @Get('login-url')
     @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
     async getLoginUrl(@Req() req, @Query('mobile') mobile?: string) {
         const isMobile = mobile === 'true';
         const authUrl = await this.youtubeAuthService.getAuthorizationUrl(req.user.user_id, isMobile);
         return { url: authUrl };
-    }    @Get('register-or-login')
+    }    
+    
+    @Get('register-or-login')
     async registerOrLogin(@Res() res: Response, @Query('mobile') mobile?: string) {
-        // This endpoint doesn't require authentication as it's for new users
         const isMobile = mobile === 'true';
         const authUrl = await this.youtubeAuthService.getAuthorizationUrl(undefined, isMobile);
         return res.redirect(authUrl);
-    }    @Get('callback')
+    }    
+    
+    @Get('callback')
     async callback(
         @Query('code') code: string,
         @Query('state') state: string,
@@ -39,7 +46,6 @@ export class YoutubeAuthController {
     ) {
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
         
-        // Detect if this is a mobile request
         const isMobile = mobile === 'true' || req.headers['user-agent']?.includes('Capacitor');
         
         if (error) {
@@ -108,7 +114,9 @@ export class YoutubeAuthController {
             const errorMessage = err.message || 'Authentication failed';
             return res.redirect(`com.enterlist.app://oauth/error?error=${encodeURIComponent(errorMessage)}&provider=youtube`);
         }
-    }    @Get('playlists')
+    }    
+    
+    @Get('playlists')
     @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     async getPlaylists(
         @Req() req,
@@ -116,7 +124,9 @@ export class YoutubeAuthController {
         @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
     ) {
         return this.youtubeAuthService.getUserPlaylists(req.user.user_id, limit, offset);
-    }    @Get('channels')
+    }    
+    
+    @Get('channels')
     @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     async getChannels(
         @Req() req,
@@ -124,7 +134,9 @@ export class YoutubeAuthController {
         @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
     ) {
         return this.youtubeAuthService.getUserChannels(req.user.user_id, limit, offset);
-    }    @Get('videos')
+    }    
+    
+    @Get('videos')
     @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     async getUserVideos(
         @Req() req,
@@ -133,7 +145,9 @@ export class YoutubeAuthController {
         @Query('musicOnly', new DefaultValuePipe(false)) musicOnly: boolean,
     ) {
         return this.youtubeAuthService.getUserVideos(req.user.user_id, limit, offset, musicOnly);
-    }    @Get('songs')
+    }    
+    
+    @Get('songs')
     @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     async getUserSongs(
         @Req() req,
@@ -141,14 +155,18 @@ export class YoutubeAuthController {
         @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
     ) {
         return this.youtubeAuthService.getUserSongs(req.user.user_id, limit, offset);
-    }    @Post('import/playlists')
+    }    
+    
+    @Post('import/playlists')
     @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     async importPlaylists(
         @Req() req,
         @Body() body: { playlistIds: string[] }
     ) {
         return this.youtubeAuthService.importPlaylistsToDatabase(req.user.user_id, body.playlistIds);
-    }    @Post('import/videos')
+    }    
+    
+    @Post('import/videos')
     @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     async importVideos(
         @Req() req,

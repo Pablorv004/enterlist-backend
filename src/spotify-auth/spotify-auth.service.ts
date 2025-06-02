@@ -8,8 +8,6 @@ import { catchError, firstValueFrom, of } from 'rxjs';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { AuthService } from '../auth/auth.service';
-import { user_role } from '@prisma/client';
-
 @Injectable()
 export class SpotifyAuthService {    private readonly clientId: string;
     private readonly clientSecret: string;
@@ -37,7 +35,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
         // Generate a random state parameter to prevent CSRF
         const state = crypto.randomBytes(16).toString('hex');
 
-        // Store the state with user ID and expiry (10 minutes)
         const expiresAt = new Date();
         expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
@@ -50,7 +47,9 @@ export class SpotifyAuthService {    private readonly clientId: string;
         });
 
         // Clean up expired states
-        this.cleanExpiredStates();        const scope = [
+        this.cleanExpiredStates();        
+        
+        const scope = [
             'user-read-private',
             'user-read-email',
             'playlist-read-private',
@@ -90,34 +89,28 @@ export class SpotifyAuthService {    private readonly clientId: string;
 
         this.stateMap.delete(state);
 
-        // Exchange code for access and refresh tokens
         const tokenData = await this.exchangeCodeForTokens(code);
 
-        // Get user profile from Spotify
         const profile = await this.getSpotifyUserProfile(tokenData.access_token);
 
-        // Find Spotify platform in our database
         const spotifyPlatform = await this.prismaService.platform.findFirst({
             where: { name: 'Spotify' },
         });
 
         if (!spotifyPlatform) {
             throw new NotFoundException('Spotify platform not found in database');
-        }        // Calculate token expiration date
+        }
         const tokenExpiresAt = new Date();
         tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);
 
-        // ALWAYS check if a user with this Spotify ID already exists (regardless of isNewUser flag)
         const existingOAuthUser = await this.prismaService.user.findFirst({
             where: {
                 oauth_provider: 'spotify',
                 oauth_id: profile.id,
             }
         }); if (existingOAuthUser) {
-            // User already exists with this OAuth account, log them in
             userId = existingOAuthUser.user_id;
 
-            // Update or create linked account for this existing user
             const existingLinkedAccount = await this.prismaService.linkedAccount.findFirst({
                 where: {
                     user_id: userId,
@@ -126,7 +119,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
             });
 
             if (existingLinkedAccount) {
-                // Update existing link
                 await this.prismaService.linkedAccount.update({
                     where: { linked_account_id: existingLinkedAccount.linked_account_id },
                     data: {
@@ -136,7 +128,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
                     },
                 });
             } else {
-                // Create new linked account
                 const linkedAccountData: CreateLinkedAccountDto = {
                     user_id: userId,
                     platform_id: spotifyPlatform.platform_id,
@@ -150,7 +141,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
 
             const tokenResult = this.authService.generateToken(existingOAuthUser);
 
-            // Check if user has a role - if not, they need role selection
             const needsRoleSelection = !existingOAuthUser.role;
 
             return {
@@ -161,14 +151,11 @@ export class SpotifyAuthService {    private readonly clientId: string;
             };
         }
 
-        // If this is a new user registration (from register-or-login endpoint)
         if (isNewUser) {
-            // Register a new user with Spotify info
             const email = profile.email || `${profile.id}@spotify.user`;
             const username = profile.display_name || `spotify_user_${profile.id}`;
 
-            // Generate a random password - user won't need to know it
-            // as they'll log in via Spotify OAuth
+            // Generate a random password - user won't need to know it anyway
             const password = crypto.randomBytes(16).toString('hex'); const registerResult = await this.authService.register({
                 email,
                 username,
@@ -184,7 +171,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
             throw new UnauthorizedException('User ID not found');
         }
 
-        // Create or update linked account
         const linkedAccountData: CreateLinkedAccountDto = {
             user_id: userId,
             platform_id: spotifyPlatform.platform_id,
@@ -194,7 +180,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
             token_expires_at: tokenExpiresAt,
         };
 
-        // Check if the user already has a linked Spotify account
         const existingAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -203,7 +188,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
         });
 
         if (existingAccount) {
-            // Update existing link
             await this.prismaService.linkedAccount.update({
                 where: { linked_account_id: existingAccount.linked_account_id },
                 data: {
@@ -212,11 +196,10 @@ export class SpotifyAuthService {    private readonly clientId: string;
                     token_expires_at: tokenExpiresAt,
                 },
             });
-        } else {            // Create new link
+        } else {
             await this.linkedAccountsService.create(linkedAccountData);
         }
 
-        // For new users, return auth token with isNewUser flag
         if (isNewUser) {
             const user = await this.prismaService.user.findUnique({
                 where: { user_id: userId },
@@ -291,9 +274,9 @@ export class SpotifyAuthService {    private readonly clientId: string;
                 this.stateMap.delete(key);
             }
         }
-    }    // Get user playlists from Spotify
+    }
+
     async getUserPlaylists(userId: string, limit = 50, offset = 0): Promise<any> {
-        // Find the Spotify platform
         const spotifyPlatform = await this.prismaService.platform.findFirst({
             where: { name: 'Spotify' },
         });
@@ -302,7 +285,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
             throw new NotFoundException('Spotify platform not found in database');
         }
 
-        // Find the user's linked Spotify account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -314,13 +296,11 @@ export class SpotifyAuthService {    private readonly clientId: string;
             throw new NotFoundException('Spotify account not linked for this user');
         }
 
-        // Check if token is expired and refresh if needed
         if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
             const refreshedAccount = await this.refreshAccessToken(userId, spotifyPlatform.platform_id);
             linkedAccount.access_token = refreshedAccount.access_token;
         }
 
-        // Fetch playlists from Spotify API
         const headers = {
             'Authorization': `Bearer ${linkedAccount.access_token}`,
         }; try {
@@ -332,12 +312,10 @@ export class SpotifyAuthService {    private readonly clientId: string;
                 ),
             );
 
-            // Filter playlists to only show those owned by the user
             const ownedPlaylists = data.items.filter((playlist) => {
                 return playlist.owner && playlist.owner.id === linkedAccount.external_user_id;
             });
 
-            // For each owned playlist, get the tracks
             const playlistsWithTracks = await Promise.all(
                 ownedPlaylists.map(async (playlist) => {
                     try {
@@ -369,7 +347,7 @@ export class SpotifyAuthService {    private readonly clientId: string;
             return {
                 ...data,
                 items: playlistsWithTracks,
-                total: ownedPlaylists.length // Update total to reflect filtered results
+                total: ownedPlaylists.length
             };
         } catch (error) {
             throw new BadRequestException(`Failed to fetch playlists: ${error.message}`);
@@ -378,7 +356,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
 
     // Method to refresh an access token when it expires
     async refreshAccessToken(userId: string, platformId: number): Promise<any> {
-        // Find the linked account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -409,26 +386,23 @@ export class SpotifyAuthService {    private readonly clientId: string;
                 ),
             );
 
-            // Calculate new expiration time
             const tokenExpiresAt = new Date();
             tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + data.expires_in);
 
-            // Update the linked account
             return this.prismaService.linkedAccount.update({
                 where: { linked_account_id: linkedAccount.linked_account_id },
                 data: {
                     access_token: data.access_token,
                     token_expires_at: tokenExpiresAt,
-                    // Some oauth providers might send a new refresh token
                     refresh_token: data.refresh_token || linkedAccount.refresh_token,
                 },
             });
         } catch (error) {
             throw new BadRequestException(`Token refresh failed: ${error.message}`);
         }
-    }    // Get user tracks from Spotify (for artists)
+    }    
+    // Get user tracks from Spotify (for artists)
     async getUserTracks(userId: string, limit = 50, offset = 0): Promise<any> {
-        // Find the Spotify platform
         const spotifyPlatform = await this.prismaService.platform.findFirst({
             where: { name: 'Spotify' },
         });
@@ -437,7 +411,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
             throw new NotFoundException('Spotify platform not found in database');
         }
 
-        // Find the user's linked Spotify account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -449,19 +422,16 @@ export class SpotifyAuthService {    private readonly clientId: string;
             throw new NotFoundException('Spotify account not linked for this user');
         }
 
-        // Check if token is expired and refresh if needed
         if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
             const refreshedAccount = await this.refreshAccessToken(userId, spotifyPlatform.platform_id);
             linkedAccount.access_token = refreshedAccount.access_token;
         }
 
-        // Get user profile to find artist ID
         const profile = await this.getSpotifyUserProfile(linkedAccount.access_token);
 
         const headers = {
             'Authorization': `Bearer ${linkedAccount.access_token}`,
         }; try {
-            // First, try to get artist information
             let artistTracks: any[] = [];
 
             // Search for the user as an artist
@@ -519,28 +489,12 @@ export class SpotifyAuthService {    private readonly clientId: string;
                 console.warn('Failed to search for artist:', error.message);
             }
 
-            // Also get saved tracks as fallback
-            let savedTracks: any[] = [];
-            try {
-                const savedTracksResponse = await firstValueFrom(
-                    this.httpService.get(`https://api.spotify.com/v1/me/tracks?limit=${limit}&offset=${offset}`, { headers })
-                );
-                savedTracks = savedTracksResponse.data.items || [];
-            } catch (error) {
-                console.warn('Failed to fetch saved tracks:', error.message);
-            }
-
-            return {
-                artist_tracks: artistTracks,
-                saved_tracks: savedTracks,
-                artist_info: artistTracks.length > 0 ? { display_name: profile.display_name } : null
-            };
         } catch (error) {
             throw new BadRequestException(`Failed to fetch tracks: ${error.message}`);
         }
-    }    // Get tracks for a specific playlist from Spotify
+    }    
+    // Get tracks for a specific playlist from Spotify
     async getPlaylistTracks(playlistId: string, userId: string): Promise<any> {
-        // Find the Spotify platform
         const spotifyPlatform = await this.prismaService.platform.findFirst({
             where: { name: 'Spotify' },
         });
@@ -549,7 +503,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
             throw new NotFoundException('Spotify platform not found in database');
         }
 
-        // Find the user's linked Spotify account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -561,13 +514,11 @@ export class SpotifyAuthService {    private readonly clientId: string;
             throw new NotFoundException('Spotify account not linked for this user');
         }
 
-        // Check if token is expired and refresh if needed
         if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
             const refreshedAccount = await this.refreshAccessToken(userId, spotifyPlatform.platform_id);
             linkedAccount.access_token = refreshedAccount.access_token;
         }
 
-        // Fetch playlist tracks from Spotify API with pagination
         const headers = {
             'Authorization': `Bearer ${linkedAccount.access_token}`,
         };
@@ -575,12 +526,12 @@ export class SpotifyAuthService {    private readonly clientId: string;
         try {
             let allTracks = [];
             let offset = 0;
-            const limit = 50; // Spotify's maximum per request
+            const limit = 50;
             let hasMore = true;
             let totalCount = 0;
 
             // Fetch tracks in chunks to avoid response truncation
-            while (hasMore && allTracks.length < 500) { // Limit to 500 tracks to prevent timeouts
+            while (hasMore && allTracks.length < 500) { 
                 const { data } = await firstValueFrom(
                     this.httpService.get(
                         `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}`,
@@ -598,7 +549,7 @@ export class SpotifyAuthService {    private readonly clientId: string;
 
                 // Transform and add tracks
                 const tracks = data.items
-                    .filter((item: any) => item.track && item.track.id) // Filter out null tracks
+                    .filter((item: any) => item.track && item.track.id)
                     .map((item: any) => ({
                         track_id: item.track.id,
                         title: item.track.name,
@@ -619,7 +570,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
                 offset += limit;
                 hasMore = data.next !== null && allTracks.length < data.total;
 
-                // Add small delay to avoid rate limiting
                 if (hasMore) {
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }
@@ -635,9 +585,8 @@ export class SpotifyAuthService {    private readonly clientId: string;
         } catch (error) {
             throw new BadRequestException(`Failed to fetch playlist tracks: ${error.message}`);
         }
-    }    // Import playlists to the database
+    }
     async importPlaylistsToDatabase(userId: string, playlistIds: string[]): Promise<any> {
-        // Find the Spotify platform
         const spotifyPlatform = await this.prismaService.platform.findFirst({
             where: { name: 'Spotify' },
         });
@@ -646,7 +595,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
             throw new NotFoundException('Spotify platform not found in database');
         }
 
-        // Find the user's linked Spotify account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -658,7 +606,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
             throw new NotFoundException('Spotify account not linked for this user');
         }
 
-        // Check if token is expired and refresh if needed
         if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
             const refreshedAccount = await this.refreshAccessToken(userId, spotifyPlatform.platform_id);
             linkedAccount.access_token = refreshedAccount.access_token;
@@ -674,14 +621,13 @@ export class SpotifyAuthService {    private readonly clientId: string;
 
         for (const playlistId of playlistIds) {
             try {
-                // Fetch playlist details from Spotify
                 const { data: playlistData } = await firstValueFrom(
                     this.httpService.get(`https://api.spotify.com/v1/playlists/${playlistId}`, { headers }).pipe(
                         catchError(error => {
                             throw new BadRequestException(`Failed to fetch Spotify playlist ${playlistId}: ${error.message}`);
                         }),
                     ),
-                );                // Check if playlist already exists
+                );
                 const existingPlaylist = await this.prismaService.playlist.findFirst({
                     where: {
                         platform_id: spotifyPlatform.platform_id,
@@ -698,7 +644,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
                     },
                 });
 
-                // If playlist exists and belongs to a different user, throw an error
                 if (existingPlaylist && existingPlaylist.creator_id !== userId) {
                     throw new ConflictException(
                         `Playlist "${existingPlaylist.name}" is already registered in our database by user ${existingPlaylist.creator.username} (${existingPlaylist.creator.email}). Please contact administrator help for assistance.`
@@ -712,12 +657,11 @@ export class SpotifyAuthService {    private readonly clientId: string;
                     cover_image_url: playlistData.images?.[0]?.url || null,
                     is_visible: true,
                     track_count: playlistData.tracks?.total || 0,
-                    deleted: false, // Restore if previously deleted
+                    deleted: false, 
                     updated_at: new Date(),
                 };
 
                 if (existingPlaylist) {
-                    // Update existing playlist (only if it belongs to the current user)
                     const updatedPlaylist = await this.prismaService.playlist.update({
                         where: { playlist_id: existingPlaylist.playlist_id },
                         data: playlistUpdateData,
@@ -734,7 +678,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
 
                     updatedPlaylists.push(updatedPlaylist);
                 } else {
-                    // Create new playlist
                     const newPlaylist = await this.prismaService.playlist.create({
                         data: {
                             playlist_id: uuidv4(),
@@ -777,7 +720,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
     }
 
     async syncUserPlaylists(userId: string): Promise<any> {
-        // Find the Spotify platform
         const spotifyPlatform = await this.prismaService.platform.findFirst({
             where: { name: 'Spotify' },
         });
@@ -786,7 +728,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
             throw new NotFoundException('Spotify platform not found in database');
         }
 
-        // Get existing playlists from database
         const existingPlaylists = await this.prismaService.playlist.findMany({
             where: {
                 creator_id: userId,
@@ -802,7 +743,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
             };
         }
 
-        // Get fresh playlists from Spotify
         const spotifyPlaylists = await this.getUserPlaylists(userId);
         
         const updatedPlaylists: any[] = [];
@@ -810,13 +750,11 @@ export class SpotifyAuthService {    private readonly clientId: string;
 
         for (const existingPlaylist of existingPlaylists) {
             try {
-                // Find the corresponding playlist in Spotify data
                 const spotifyPlaylist = spotifyPlaylists.items.find(
                     (sp: any) => sp.id === existingPlaylist.platform_specific_id
                 );
 
                 if (spotifyPlaylist) {
-                    // Update the existing playlist with fresh data from Spotify
                     const updatedPlaylist = await this.prismaService.playlist.update({
                         where: { playlist_id: existingPlaylist.playlist_id },
                         data: {
@@ -858,7 +796,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
 
     // Sync user's existing tracks/songs with fresh data from Spotify
     async syncUserTracks(userId: string): Promise<any> {
-        // Find the Spotify platform
         const spotifyPlatform = await this.prismaService.platform.findFirst({
             where: { name: 'Spotify' },
         });
@@ -867,7 +804,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
             throw new NotFoundException('Spotify platform not found in database');
         }
 
-        // Get existing songs from database for this user
         const existingSongs = await this.prismaService.song.findMany({
             where: {
                 artist_id: userId,
@@ -884,7 +820,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
             };
         }
 
-        // Find the user's linked Spotify account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -896,7 +831,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
             throw new NotFoundException('Spotify account not linked for this user');
         }
 
-        // Check if token is expired and refresh if needed
         if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
             const refreshedAccount = await this.refreshAccessToken(userId, spotifyPlatform.platform_id);
             linkedAccount.access_token = refreshedAccount.access_token;
@@ -909,16 +843,13 @@ export class SpotifyAuthService {    private readonly clientId: string;
         const updatedSongs: any[] = [];
         const syncErrors: any[] = [];
 
-        // Get track IDs for batching
         const trackIds = existingSongs.map(song => song.platform_specific_id);
 
-        // Process tracks in chunks of 50 (Spotify API limit)
         const chunkSize = 50;
         for (let i = 0; i < trackIds.length; i += chunkSize) {
             const chunk = trackIds.slice(i, i + chunkSize);
 
             try {
-                // Fetch fresh track details from Spotify API
                 const { data: tracksData } = await firstValueFrom(
                     this.httpService.get(
                         `https://api.spotify.com/v1/tracks?ids=${chunk.join(',')}`,
@@ -931,16 +862,14 @@ export class SpotifyAuthService {    private readonly clientId: string;
                 );
 
                 for (const track of tracksData.tracks || []) {
-                    if (!track) continue; // Skip null tracks (deleted from platform)
+                    if (!track) continue;
 
                     try {
-                        // Find the corresponding song in our database
                         const existingSong = existingSongs.find(
                             song => song.platform_specific_id === track.id
                         );
 
                         if (existingSong) {
-                            // Update the existing song with fresh data from Spotify
                             const updatedSong = await this.prismaService.song.update({
                                 where: { song_id: existingSong.song_id },
                                 data: {
@@ -986,7 +915,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
                 });
             }
 
-            // Add small delay to avoid rate limiting
             if (i + chunkSize < trackIds.length) {
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
@@ -999,9 +927,7 @@ export class SpotifyAuthService {    private readonly clientId: string;
         };
     }
 
-    // Import tracks to the database (as songs)
     async importTracksToDatabase(userId: string, trackIds: string[]): Promise<any> {
-        // Find the Spotify platform
         const spotifyPlatform = await this.prismaService.platform.findFirst({
             where: { name: 'Spotify' },
         });
@@ -1010,7 +936,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
             throw new NotFoundException('Spotify platform not found in database');
         }
 
-        // Find the user's linked Spotify account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -1022,7 +947,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
             throw new NotFoundException('Spotify account not linked for this user');
         }
 
-        // Check if token is expired and refresh if needed
         if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
             const refreshedAccount = await this.refreshAccessToken(userId, spotifyPlatform.platform_id);
             linkedAccount.access_token = refreshedAccount.access_token;
@@ -1036,13 +960,11 @@ export class SpotifyAuthService {    private readonly clientId: string;
         const updatedTracks: any[] = [];
         const failedTracks: any[] = [];
 
-        // Process tracks in chunks of 50 (Spotify API limit)
         const chunkSize = 50;
         for (let i = 0; i < trackIds.length; i += chunkSize) {
             const chunk = trackIds.slice(i, i + chunkSize);
 
             try {
-                // Fetch track details from Spotify
                 const { data: tracksData } = await firstValueFrom(
                     this.httpService.get(
                         `https://api.spotify.com/v1/tracks?ids=${chunk.join(',')}`,
@@ -1055,9 +977,9 @@ export class SpotifyAuthService {    private readonly clientId: string;
                 );
 
                 for (const track of tracksData.tracks || []) {
-                    if (!track) continue; // Skip null tracks
+                    if (!track) continue; 
 
-                    try {                        // Check if song already exists
+                    try {
                         const existingSong = await this.prismaService.song.findFirst({
                             where: {
                                 platform_id: spotifyPlatform.platform_id,
@@ -1074,7 +996,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
                             },
                         });
 
-                        // If song exists and belongs to a different user, throw an error
                         if (existingSong && existingSong.artist_id !== userId) {
                             throw new ConflictException(
                                 `Song "${existingSong.title}" is already registered in our database by user ${existingSong.artist.username} (${existingSong.artist.email}). Please contact administrator help for assistance.`
@@ -1089,12 +1010,11 @@ export class SpotifyAuthService {    private readonly clientId: string;
                             cover_image_url: track.album?.images?.[0]?.url || null,
                             duration_ms: track.duration_ms || null,
                             is_visible: true,
-                            deleted: false, // Restore if previously deleted
+                            deleted: false,
                             updated_at: new Date(),
                         };
 
                         if (existingSong) {
-                            // Update existing song
                             const updatedSong = await this.prismaService.song.update({
                                 where: { song_id: existingSong.song_id },
                                 data: songUpdateData,
@@ -1111,7 +1031,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
 
                             updatedTracks.push(updatedSong);
                         } else {
-                            // Create new song
                             const newSong = await this.prismaService.song.create({
                                 data: {
                                     song_id: uuidv4(),
@@ -1154,7 +1073,6 @@ export class SpotifyAuthService {    private readonly clientId: string;
                 });
             }
 
-            // Add small delay to avoid rate limiting
             if (i + chunkSize < trackIds.length) {
                 await new Promise(resolve => setTimeout(resolve, 100));
             }

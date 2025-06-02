@@ -11,25 +11,30 @@ export class SpotifyAuthController {
     constructor(
         private readonly spotifyAuthService: SpotifyAuthService,
         private readonly configService: ConfigService
-    ) { }    @Get('login')
+    ) { }    
+    @Get('login')
     @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
     async login(@Req() req, @Res() res: Response) {
         const authUrl = await this.spotifyAuthService.getAuthorizationUrl(req.user.user_id);
         return res.redirect(authUrl);
-    }    @Get('login-url')
+    }    
+    
+    @Get('login-url')
     @UseGuards(JwtAuthGuard, EmailConfirmedGuard)
     async getLoginUrl(@Req() req, @Query('mobile') mobile?: string) {
         const isMobile = mobile === 'true';
         const authUrl = await this.spotifyAuthService.getAuthorizationUrl(req.user.user_id, isMobile);
         return { url: authUrl };
     }    
+
     @Get('register-or-login')
     async registerOrLogin(@Res() res: Response, @Query('mobile') mobile?: string) {
-        // This endpoint doesn't require authentication as it's for new users
         const isMobile = mobile === 'true';
         const authUrl = await this.spotifyAuthService.getAuthorizationUrl(undefined, isMobile);
         return res.redirect(authUrl);
-    }    @Get('callback')
+    }    
+    
+    @Get('callback')
     async callback(
         @Query('code') code: string,
         @Query('state') state: string,
@@ -40,7 +45,6 @@ export class SpotifyAuthController {
     ) {
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
         
-        // Detect if this is a mobile request
         const isMobile = mobile === 'true' || req.headers['user-agent']?.includes('Capacitor');
         
         if (error) {
@@ -84,7 +88,6 @@ export class SpotifyAuthController {
         @Query('code') code: string,
         @Query('state') state: string,
         @Query('error') error: string,
-        @Req() req,
         @Res() res: Response,
     ) {
         if (error) {

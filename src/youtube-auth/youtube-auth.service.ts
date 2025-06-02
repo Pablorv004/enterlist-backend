@@ -6,9 +6,7 @@ import { CreateLinkedAccountDto } from '../linked-accounts/dto/linked-account.dt
 import { PrismaService } from '../prisma/prisma.service';
 import { catchError, firstValueFrom } from 'rxjs';
 import * as crypto from 'crypto';
-import { v4 as uuidv4 } from 'uuid';
 import { AuthService } from '../auth/auth.service';
-import { user_role } from '@prisma/client';
 
 @Injectable()
 export class YoutubeAuthService {
@@ -30,17 +28,14 @@ export class YoutubeAuthService {
         this.clientSecret = this.configService.get<string>('YOUTUBE_CLIENT_SECRET') || 'test_client_secret';
         this.apiKey = this.configService.get<string>('YOUTUBE_API_KEY') || 'test_api_key';
 
-        // In production, this would come from environment variables or config
         const apiBaseUrl = this.configService.get<string>('API_BASE_URL') || 'http://localhost:3000';
         this.redirectUri = `${apiBaseUrl}/api/auth/youtube/callback`;
         this.mobileRedirectUri = `${apiBaseUrl}/api/auth/youtube/mobile-callback`;
     }
 
     async getAuthorizationUrl(userId?: string, isMobile?: boolean): Promise<string> {
-        // Generate a random state parameter to prevent CSRF
         const state = crypto.randomBytes(16).toString('hex');
 
-        // Store the state with user ID and expiry (10 minutes)
         const expiresAt = new Date();
         expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
@@ -61,10 +56,8 @@ export class YoutubeAuthService {
             'https://www.googleapis.com/auth/userinfo.profile'
         ].join(' ');
 
-        // Use appropriate redirect URI based on platform
         const redirectUri = isMobile ? this.mobileRedirectUri : this.redirectUri;
 
-        // Construct the YouTube authorization URL
         const params = new URLSearchParams({
             client_id: this.clientId,
             redirect_uri: redirectUri,
@@ -79,7 +72,6 @@ export class YoutubeAuthService {
     }
 
     async handleCallback(code: string, state: string): Promise<any> {
-        // Verify state parameter to prevent CSRF attacks
         if (!state || !this.stateMap.has(state)) {
             throw new UnauthorizedException('Invalid state parameter');
         }
@@ -95,28 +87,23 @@ export class YoutubeAuthService {
 
         this.stateMap.delete(state);
 
-        // Exchange code for access and refresh tokens
         const tokenData = await this.exchangeCodeForTokens(code);
 
-        // Get user profile from Google
         const profile = await this.getUserProfile(tokenData.access_token);
 
-        // Get YouTube channel info
         const channelInfo = await this.getYouTubeChannelInfo(tokenData.access_token);
         const youtubeId = channelInfo?.items?.[0]?.id || profile.id;
 
-        // Find YouTube platform in our database
         const youtubePlatform = await this.prismaService.platform.findFirst({
             where: { name: 'YouTube' },
         });
 
         if (!youtubePlatform) {
             throw new NotFoundException('YouTube platform not found in database');
-        }        // Calculate token expiration date
+        }
         const tokenExpiresAt = new Date();
         tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);
 
-        // ALWAYS check if a user with this YouTube ID already exists (regardless of isNewUser flag)
         const existingOAuthUser = await this.prismaService.user.findFirst({
             where: {
                 oauth_provider: 'youtube',
@@ -125,10 +112,8 @@ export class YoutubeAuthService {
         });
 
         if (existingOAuthUser) {
-            // User already exists with this OAuth account, log them in
             userId = existingOAuthUser.user_id;
 
-            // Update or create linked account for this existing user
             const existingLinkedAccount = await this.prismaService.linkedAccount.findFirst({
                 where: {
                     user_id: userId,
@@ -137,7 +122,6 @@ export class YoutubeAuthService {
             });
 
             if (existingLinkedAccount) {
-                // Update existing link
                 await this.prismaService.linkedAccount.update({
                     where: { linked_account_id: existingLinkedAccount.linked_account_id },
                     data: {
@@ -147,7 +131,6 @@ export class YoutubeAuthService {
                     },
                 });
             } else {
-                // Create new linked account
                 const linkedAccountData: CreateLinkedAccountDto = {
                     user_id: userId,
                     platform_id: youtubePlatform.platform_id,
@@ -160,7 +143,6 @@ export class YoutubeAuthService {
             }
             const tokenResult = this.authService.generateToken(existingOAuthUser);
 
-            // Check if user has a role - if not, they need role selection
             const needsRoleSelection = !existingOAuthUser.role;
 
             return {
@@ -171,14 +153,11 @@ export class YoutubeAuthService {
             };
         }
 
-        // If this is a new user registration (from register-or-login endpoint)
         if (isNewUser) {
-            // Register a new user with YouTube info
             const email = profile.email || `${youtubeId}@youtube.user`;
             const username = profile.name || channelInfo?.items?.[0]?.snippet?.title || `youtube_user_${youtubeId}`;
 
-            // Generate a random password - user won't need to know it
-            // as they'll log in via YouTube OAuth
+            // Generate a random password
             const password = crypto.randomBytes(16).toString('hex');
             const registerResult = await this.authService.register({
                 email,
@@ -195,7 +174,6 @@ export class YoutubeAuthService {
             throw new UnauthorizedException('User ID not found');
         }
 
-        // Create or update linked account
         const linkedAccountData: CreateLinkedAccountDto = {
             user_id: userId,
             platform_id: youtubePlatform.platform_id,
@@ -205,7 +183,6 @@ export class YoutubeAuthService {
             token_expires_at: tokenExpiresAt,
         };
 
-        // Check if the user already has a linked YouTube account
         const existingAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -214,7 +191,6 @@ export class YoutubeAuthService {
         });
 
         if (existingAccount) {
-            // Update existing link
             await this.prismaService.linkedAccount.update({
                 where: { linked_account_id: existingAccount.linked_account_id },
                 data: {
@@ -224,9 +200,8 @@ export class YoutubeAuthService {
                 },
             });
         } else {
-            // Create new link
             await this.linkedAccountsService.create(linkedAccountData);
-        }        // For new users, return auth token
+        }
         if (isNewUser) {
             const user = await this.prismaService.user.findUnique({
                 where: { user_id: userId },
@@ -304,7 +279,6 @@ export class YoutubeAuthService {
             const { data } = await firstValueFrom(
                 this.httpService.get('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true', { headers }).pipe(
                     catchError(error => {
-                        // This might fail if the user doesn't have a YouTube channel
                         return [];
                     }),
                 ),
@@ -312,7 +286,6 @@ export class YoutubeAuthService {
 
             return data;
         } catch (error) {
-            // Just return empty if failed to fetch channel info
             return { items: [] };
         }
     }
@@ -326,9 +299,7 @@ export class YoutubeAuthService {
         }
     }
 
-    // Get user channels from YouTube
     async getUserChannels(userId: string, limit = 50, offset = 0): Promise<any> {
-        // Find the YouTube platform
         const youtubePlatform = await this.prismaService.platform.findFirst({
             where: { name: 'YouTube' },
         });
@@ -337,7 +308,6 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube platform not found in database');
         }
 
-        // Find the user's linked YouTube account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -349,16 +319,11 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube account not linked for this user');
         }
 
-        // Check if token is expired and refresh if needed
         if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
             const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
             linkedAccount.access_token = refreshedAccount.access_token;
         }
-
-        // Fetch channels from YouTube API
-        const headers = {
-            'Authorization': `Bearer ${linkedAccount.access_token}`,
-        }; try {
+        try {
             const params = new URLSearchParams({
                 part: 'snippet,contentDetails,statistics',
                 mine: 'true',
@@ -383,9 +348,7 @@ export class YoutubeAuthService {
         }
     }
 
-    // Get user playlists from YouTube
     async getUserPlaylists(userId: string, limit = 50, offset = 0): Promise<any> {
-        // Find the YouTube platform
         const youtubePlatform = await this.prismaService.platform.findFirst({
             where: { name: 'YouTube' },
         });
@@ -394,7 +357,6 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube platform not found in database');
         }
 
-        // Find the user's linked YouTube account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -406,16 +368,12 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube account not linked for this user');
         }
 
-        // Check if token is expired and refresh if needed
         if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
             const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
             linkedAccount.access_token = refreshedAccount.access_token;
         }
 
-        // Fetch playlists from YouTube API
-        const headers = {
-            'Authorization': `Bearer ${linkedAccount.access_token}`,
-        }; try {
+        try {
             const params = new URLSearchParams({
                 part: 'snippet,contentDetails',
                 mine: 'true',
@@ -446,9 +404,8 @@ export class YoutubeAuthService {
         } catch (error) {
             throw new BadRequestException(`Failed to fetch playlists: ${error.message}`);
         }
-    }    // Get user videos from YouTube
+    }
     async getUserVideos(userId: string, limit = 50, offset = 0, musicOnly = false): Promise<any> {
-        // Find the YouTube platform
         const youtubePlatform = await this.prismaService.platform.findFirst({
             where: { name: 'YouTube' },
         });
@@ -457,7 +414,6 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube platform not found in database');
         }
 
-        // Find the user's linked YouTube account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -469,13 +425,11 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube account not linked for this user');
         }
 
-        // Check if token is expired and refresh if needed
         if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
             const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
             linkedAccount.access_token = refreshedAccount.access_token;
         }
 
-        // First, get the user's channel ID
         const channelsResponse = await this.getUserChannels(userId);
 
         if (!channelsResponse.items || channelsResponse.items.length === 0) {
@@ -484,7 +438,6 @@ export class YoutubeAuthService {
 
         const channelId = channelsResponse.items[0].id;
 
-        // Fetch videos from YouTube API
         const headers = {
             'Authorization': `Bearer ${linkedAccount.access_token}`,
         };
@@ -501,7 +454,6 @@ export class YoutubeAuthService {
                 ),
             );
 
-            // If musicOnly is true, filter videos by music category
             if (musicOnly && data.items && data.items.length > 0) {
                 const videoIds = data.items.map((item: any) => item.id.videoId).join(',');
 
@@ -518,18 +470,15 @@ export class YoutubeAuthService {
                         ),
                     );
 
-                    // Filter videos that are in the Music category (categoryId: "10")
                     const musicVideoIds = new Set(
                         videoDetailsResponse.data.items
                             .filter((video: any) => video.snippet.categoryId === "10")
                             .map((video: any) => video.id)
                     );
 
-                    // Filter original results to only include music videos
                     data.items = data.items.filter((item: any) => musicVideoIds.has(item.id.videoId));
                 } catch (error) {
                     console.warn('Error filtering videos by music category:', error.message);
-                    // If filtering fails, return all videos
                 }
             }
 
@@ -539,14 +488,11 @@ export class YoutubeAuthService {
         }
     }
 
-    // Get user songs (music videos) from YouTube
     async getUserSongs(userId: string, limit = 50, offset = 0): Promise<any> {
         return this.getUserVideos(userId, limit, offset, true);
     }
 
-    // Method to refresh an access token when it expires
     async refreshAccessToken(userId: string, platformId: number): Promise<any> {
-        // Find the linked account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -578,26 +524,22 @@ export class YoutubeAuthService {
                 ),
             );
 
-            // Calculate new expiration time
             const tokenExpiresAt = new Date();
             tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + data.expires_in);
 
-            // Update the linked account
             return this.prismaService.linkedAccount.update({
                 where: { linked_account_id: linkedAccount.linked_account_id },
                 data: {
                     access_token: data.access_token,
                     token_expires_at: tokenExpiresAt,
-                    // Some oauth providers might send a new refresh token
                     refresh_token: data.refresh_token || linkedAccount.refresh_token,
                 },
             });
         } catch (error) {
             throw new BadRequestException(`Token refresh failed: ${error.message}`);
         }
-    }    // Get tracks for a specific playlist from YouTube
+    }
     async getPlaylistTracks(playlistId: string, userId: string): Promise<any> {
-        // Find the YouTube platform
         const youtubePlatform = await this.prismaService.platform.findFirst({
             where: { name: 'YouTube' },
         });
@@ -606,7 +548,6 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube platform not found in database');
         }
 
-        // Find the user's linked YouTube account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -617,8 +558,6 @@ export class YoutubeAuthService {
         if (!linkedAccount) {
             throw new NotFoundException('YouTube account not linked for this user');
         }
-
-        // Check if token is expired and refresh if needed
         if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
             const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
             linkedAccount.access_token = refreshedAccount.access_token;
@@ -632,9 +571,7 @@ export class YoutubeAuthService {
             let pageCount = 0;
             const maxPages = 10; // Limit to prevent infinite loops
 
-            // Fetch playlist items in chunks with pagination
             do {
-                // Use API key in addition to OAuth token for better reliability
                 const params = new URLSearchParams({
                     part: 'snippet,contentDetails',
                     playlistId: playlistId,
@@ -675,7 +612,6 @@ export class YoutubeAuthService {
                     totalCount = data.pageInfo?.totalResults || 0;
                 }
 
-                // Transform the data to include additional track information
                 const tracks = (data.items || [])
                     .filter((item: any) => item.contentDetails?.videoId) // Filter out unavailable videos
                     .map((item: any) => ({
@@ -696,7 +632,6 @@ export class YoutubeAuthService {
                 nextPageToken = data.nextPageToken || '';
                 pageCount++;
 
-                // Add small delay to avoid rate limiting
                 if (nextPageToken && pageCount < maxPages) {
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }
@@ -715,9 +650,7 @@ export class YoutubeAuthService {
         }
     }
 
-    // Import playlists to the database
     async importPlaylistsToDatabase(userId: string, playlistIds: string[]): Promise<any> {
-        // Find the YouTube platform
         const youtubePlatform = await this.prismaService.platform.findFirst({
             where: { name: 'YouTube' },
         });
@@ -726,7 +659,6 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube platform not found in database');
         }
 
-        // Find the user's linked YouTube account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -737,8 +669,6 @@ export class YoutubeAuthService {
         if (!linkedAccount) {
             throw new NotFoundException('YouTube account not linked for this user');
         }
-
-        // Check if token is expired and refresh if needed
         if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
             const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
             linkedAccount.access_token = refreshedAccount.access_token;
@@ -754,7 +684,6 @@ export class YoutubeAuthService {
 
         for (const playlistId of playlistIds) {
             try {
-                // Fetch playlist details from YouTube
                 const params = new URLSearchParams({
                     part: 'snippet,contentDetails',
                     id: playlistId,
@@ -797,7 +726,6 @@ export class YoutubeAuthService {
                     },
                 });
 
-                // If playlist exists and belongs to a different user, throw an error
                 if (existingPlaylist && existingPlaylist.creator_id !== userId) {
                     throw new ConflictException(
                         `Playlist "${existingPlaylist.name}" is already registered in our database by user ${existingPlaylist.creator.username} (${existingPlaylist.creator.email}). Please contact administrator help for assistance.`
@@ -817,7 +745,6 @@ export class YoutubeAuthService {
                 };
 
                 if (existingPlaylist) {
-                    // Update existing playlist
                     const updatedPlaylist = await this.prismaService.playlist.update({
                         where: { playlist_id: existingPlaylist.playlist_id },
                         data: playlistUpdateData,
@@ -834,7 +761,6 @@ export class YoutubeAuthService {
 
                     updatedPlaylists.push(updatedPlaylist);
                 } else {
-                    // Create new playlist
                     const newPlaylist = await this.prismaService.playlist.create({
                         data: {
                             playlist_id: require('uuid').v4(),
@@ -877,9 +803,7 @@ export class YoutubeAuthService {
         };
     }
 
-    // Import videos to the database (as songs)
     async importVideosToDatabase(userId: string, videoIds: string[]): Promise<any> {
-        // Find the YouTube platform
         const youtubePlatform = await this.prismaService.platform.findFirst({
             where: { name: 'YouTube' },
         });
@@ -888,7 +812,6 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube platform not found in database');
         }
 
-        // Find the user's linked YouTube account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -900,7 +823,6 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube account not linked for this user');
         }
 
-        // Check if token is expired and refresh if needed
         if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
             const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
             linkedAccount.access_token = refreshedAccount.access_token;
@@ -920,7 +842,6 @@ export class YoutubeAuthService {
             const chunk = videoIds.slice(i, i + chunkSize);
 
             try {
-                // Fetch video details from YouTube
                 const params = new URLSearchParams({
                     part: 'snippet,contentDetails',
                     id: chunk.join(','),
@@ -941,7 +862,7 @@ export class YoutubeAuthService {
                 for (const video of videosData.items || []) {
                     if (!video) continue; // Skip null videos
 
-                    try {                        // Check if song already exists
+                    try {
                         const existingSong = await this.prismaService.song.findFirst({
                             where: {
                                 platform_id: youtubePlatform.platform_id,
@@ -957,7 +878,6 @@ export class YoutubeAuthService {
                             },
                         });
 
-                        // Check ownership if song already exists
                         if (existingSong && existingSong.artist_id !== userId) {
                             throw new ConflictException(
                                 `Video '${video.snippet.title}' is already registered by user ${existingSong.artist.username} (${existingSong.artist.email})`
@@ -1008,11 +928,10 @@ export class YoutubeAuthService {
 
                             updatedVideos.push(updatedSong);
                         } else {
-                            // Create new song
                             const newSong = await this.prismaService.song.create({
                                 data: {
                                     song_id: require('uuid').v4(),
-                                    artist_id: userId, // The user importing becomes the artist
+                                    artist_id: userId,
                                     platform_id: youtubePlatform.platform_id,
                                     platform_specific_id: video.id,
                                     created_at: new Date(),
@@ -1051,7 +970,6 @@ export class YoutubeAuthService {
                 });
             }
 
-            // Add small delay to avoid rate limiting
             if (i + chunkSize < videoIds.length) {
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
@@ -1065,9 +983,7 @@ export class YoutubeAuthService {
         };
     }
 
-    // Sync user playlists - updates existing playlists with fresh data from YouTube
     async syncUserPlaylists(userId: string): Promise<any> {
-        // Find the YouTube platform
         const youtubePlatform = await this.prismaService.platform.findFirst({
             where: { name: 'YouTube' },
         });
@@ -1076,7 +992,6 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube platform not found in database');
         }
 
-        // Find the user's linked YouTube account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -1088,13 +1003,11 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube account not linked for this user');
         }
 
-        // Check if token is expired and refresh if needed
         if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
             const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
             linkedAccount.access_token = refreshedAccount.access_token;
         }
 
-        // Get existing playlists from database for this user and platform
         const existingPlaylists = await this.prismaService.playlist.findMany({
             where: {
                 creator_id: userId,
@@ -1119,7 +1032,6 @@ export class YoutubeAuthService {
             };
         }
 
-        // Get fresh playlist data from YouTube API
         const playlistIds = existingPlaylists.map(p => p.platform_specific_id);
         const headers = {
             'Authorization': `Bearer ${linkedAccount.access_token}`,
@@ -1127,7 +1039,6 @@ export class YoutubeAuthService {
 
         let youtubePlaylists: any = { items: [] };
         try {
-            // Fetch playlists in chunks of 50 (YouTube API limit)
             const chunkSize = 50;
             for (let i = 0; i < playlistIds.length; i += chunkSize) {
                 const chunk = playlistIds.slice(i, i + chunkSize);
@@ -1162,16 +1073,13 @@ export class YoutubeAuthService {
         const updatedPlaylists: any[] = [];
         const errors: string[] = [];
 
-        // Update each existing playlist with fresh data from YouTube
         for (const existingPlaylist of existingPlaylists) {
             try {
-                // Find the corresponding playlist in YouTube data
                 const youtubePlaylist = youtubePlaylists.items.find(
                     (yp: any) => yp.id === existingPlaylist.platform_specific_id
                 );
 
                 if (youtubePlaylist) {
-                    // Update the existing playlist with fresh data from YouTube
                     const updatedPlaylist = await this.prismaService.playlist.update({
                         where: { playlist_id: existingPlaylist.playlist_id },
                         data: {
@@ -1212,9 +1120,7 @@ export class YoutubeAuthService {
         };
     }
 
-    // Sync user's existing tracks/songs with fresh data from YouTube
     async syncUserTracks(userId: string): Promise<any> {
-        // Find the YouTube platform
         const youtubePlatform = await this.prismaService.platform.findFirst({
             where: { name: 'YouTube' },
         });
@@ -1223,7 +1129,6 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube platform not found in database');
         }
 
-        // Find the user's linked YouTube account
         const linkedAccount = await this.prismaService.linkedAccount.findFirst({
             where: {
                 user_id: userId,
@@ -1235,13 +1140,11 @@ export class YoutubeAuthService {
             throw new NotFoundException('YouTube account not linked for this user');
         }
 
-        // Check if token is expired and refresh if needed
         if (linkedAccount.token_expires_at && linkedAccount.token_expires_at < new Date()) {
             const refreshedAccount = await this.refreshAccessToken(userId, youtubePlatform.platform_id);
             linkedAccount.access_token = refreshedAccount.access_token;
         }
 
-        // Get existing songs from database for this user
         const existingSongs = await this.prismaService.song.findMany({
             where: {
                 artist_id: userId,
@@ -1265,15 +1168,13 @@ export class YoutubeAuthService {
         const updatedSongs: any[] = [];
         const syncErrors: any[] = [];
 
-        // Get video IDs for batching
         const videoIds = existingSongs.map(song => song.platform_specific_id);
 
-        // Process videos in chunks of 50 (YouTube API limit)
         const chunkSize = 50;
         for (let i = 0; i < videoIds.length; i += chunkSize) {
             const chunk = videoIds.slice(i, i + chunkSize);
 
-            try {                // Fetch fresh video details from YouTube API
+            try {
                 const params = new URLSearchParams({
                     part: 'snippet,contentDetails',
                     id: chunk.join(','),
@@ -1293,14 +1194,12 @@ export class YoutubeAuthService {
                 const videosData = response.data;
 
                 for (const video of videosData.items || []) {
-                    if (!video) continue; // Skip null videos (deleted from platform)
+                    if (!video) continue;
 
                     try {
-                        // Find the corresponding song in our database
                         const existingSong = existingSongs.find(
                             song => song.platform_specific_id === video.id
                         );                        if (existingSong) {
-                            // Parse duration from YouTube format (PT#M#S) to milliseconds
                             let durationMs: number | null = null;
                             if (video.contentDetails?.duration) {
                                 const duration = video.contentDetails.duration;
@@ -1313,13 +1212,12 @@ export class YoutubeAuthService {
                                 }
                             }
 
-                            // Update the existing song with fresh data from YouTube
                             const updatedSong = await this.prismaService.song.update({
                                 where: { song_id: existingSong.song_id },
                                 data: {
                                     title: video.snippet.title,
                                     artist_name_on_platform: video.snippet.channelTitle || 'Unknown Artist',
-                                    album_name: null, // YouTube doesn't have album concept
+                                    album_name: null,
                                     url: `https://www.youtube.com/watch?v=${video.id}`,
                                     cover_image_url: video.snippet.thumbnails?.medium?.url || 
                                         video.snippet.thumbnails?.default?.url || null,
@@ -1360,7 +1258,6 @@ export class YoutubeAuthService {
                 });
             }
 
-            // Add small delay to avoid rate limiting
             if (i + chunkSize < videoIds.length) {
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
