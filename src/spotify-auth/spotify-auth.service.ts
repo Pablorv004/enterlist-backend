@@ -135,6 +135,7 @@ export class SpotifyAuthService {    private readonly clientId: string;
                         access_token: tokenData.access_token,
                         refresh_token: tokenData.refresh_token,
                         token_expires_at: tokenExpiresAt,
+                        deleted: false,
                     },
                 });
             } else {
