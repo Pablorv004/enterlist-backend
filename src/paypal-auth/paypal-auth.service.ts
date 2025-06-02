@@ -29,8 +29,8 @@ export class PaypalAuthService {
             : 'https://api.sandbox.paypal.com';
         
         const apiBaseUrl = this.configService.get<string>('API_BASE_URL');
-        this.redirectUri = `${apiBaseUrl}/api/auth/paypal/callback`;
-        this.mobileRedirectUri = `${apiBaseUrl}/api/auth/paypal/mobile-callback`;
+        this.redirectUri = `${apiBaseUrl}/api/auth/paypal/mobile-callback`;
+        this.mobileRedirectUri = `${apiBaseUrl}/api/auth/paypal/callback`;
 
         if (!this.clientId || !this.clientSecret) {
             this.logger.warn('PayPal OAuth client ID or secret is missing');
