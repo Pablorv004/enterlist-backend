@@ -217,7 +217,6 @@ export class AdminController {
         return this.adminService.deletePlatform(id);
     }
 
-    // Admin Linked Accounts Management
     @Get('linked-accounts')
     getLinkedAccounts(
         @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
@@ -241,7 +240,6 @@ export class AdminController {
         return this.adminService.deleteLinkedAccount(id);
     }
 
-    // Admin Payment Methods Management
     @Get('payment-methods')
     getPaymentMethods(
         @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,

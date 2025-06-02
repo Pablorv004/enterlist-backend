@@ -101,19 +101,55 @@ export class SpotifyAuthService {    private readonly clientId: string;
             throw new NotFoundException('Spotify platform not found in database');
         }
         const tokenExpiresAt = new Date();
-        tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);
-
-        const existingOAuthUser = await this.prismaService.user.findFirst({
+        tokenExpiresAt.setSeconds(tokenExpiresAt.getSeconds() + tokenData.expires_in);        const existingOAuthUser = await this.prismaService.user.findFirst({
             where: {
                 oauth_provider: 'spotify',
                 oauth_id: profile.id,
             }
-        }); if (existingOAuthUser) {
-            userId = existingOAuthUser.user_id;
+        }); 
+        
+        // If this is an account linking flow (userId provided), link to the specified user
+        // regardless of whether the Spotify account was used to create a different user
+        if (!isNewUser && userId) {
+            // This is account linking - link to the specified authenticated user
+            const linkedAccountData: CreateLinkedAccountDto = {
+                user_id: userId,
+                platform_id: spotifyPlatform.platform_id,
+                external_user_id: profile.id,
+                access_token: tokenData.access_token,
+                refresh_token: tokenData.refresh_token,
+                token_expires_at: tokenExpiresAt,
+            };
 
-            const existingLinkedAccount = await this.prismaService.linkedAccount.findFirst({
+            const existingAccount = await this.prismaService.linkedAccount.findFirst({
                 where: {
                     user_id: userId,
+                    platform_id: spotifyPlatform.platform_id,
+                },
+            });
+
+            if (existingAccount) {
+                await this.prismaService.linkedAccount.update({
+                    where: { linked_account_id: existingAccount.linked_account_id },
+                    data: {
+                        access_token: tokenData.access_token,
+                        refresh_token: tokenData.refresh_token,
+                        token_expires_at: tokenExpiresAt,
+                    },
+                });
+            } else {
+                await this.linkedAccountsService.create(linkedAccountData);
+            }
+
+            // Return success without token - this is account linking, not login
+            return { success: true, isNewUser: false, needsRoleSelection: false };
+        }
+        
+        // If there's an existing OAuth user and this is a login flow (not account linking)
+        if (existingOAuthUser && isNewUser) {
+            const existingLinkedAccount = await this.prismaService.linkedAccount.findFirst({
+                where: {
+                    user_id: existingOAuthUser.user_id,
                     platform_id: spotifyPlatform.platform_id,
                 },
             });
@@ -129,7 +165,7 @@ export class SpotifyAuthService {    private readonly clientId: string;
                 });
             } else {
                 const linkedAccountData: CreateLinkedAccountDto = {
-                    user_id: userId,
+                    user_id: existingOAuthUser.user_id,
                     platform_id: spotifyPlatform.platform_id,
                     external_user_id: profile.id,
                     access_token: tokenData.access_token,
@@ -149,14 +185,15 @@ export class SpotifyAuthService {    private readonly clientId: string;
                 needsRoleSelection,
                 user: existingOAuthUser
             };
-        }
-
+        }        // If this is a new user registration flow
         if (isNewUser) {
             const email = profile.email || `${profile.id}@spotify.user`;
             const username = profile.display_name || `spotify_user_${profile.id}`;
 
             // Generate a random password - user won't need to know it anyway
-            const password = crypto.randomBytes(16).toString('hex'); const registerResult = await this.authService.register({
+            const password = crypto.randomBytes(16).toString('hex'); 
+            
+            const registerResult = await this.authService.register({
                 email,
                 username,
                 password,
@@ -165,42 +202,19 @@ export class SpotifyAuthService {    private readonly clientId: string;
             });
 
             userId = registerResult.user.id;
-        }
-
-        if (!userId) {
-            throw new UnauthorizedException('User ID not found');
-        }
-
-        const linkedAccountData: CreateLinkedAccountDto = {
-            user_id: userId,
-            platform_id: spotifyPlatform.platform_id,
-            external_user_id: profile.id,
-            access_token: tokenData.access_token,
-            refresh_token: tokenData.refresh_token,
-            token_expires_at: tokenExpiresAt,
-        };
-
-        const existingAccount = await this.prismaService.linkedAccount.findFirst({
-            where: {
+            
+            // Create linked account for the new user
+            const linkedAccountData: CreateLinkedAccountDto = {
                 user_id: userId,
                 platform_id: spotifyPlatform.platform_id,
-            },
-        });
+                external_user_id: profile.id,
+                access_token: tokenData.access_token,
+                refresh_token: tokenData.refresh_token,
+                token_expires_at: tokenExpiresAt,
+            };
 
-        if (existingAccount) {
-            await this.prismaService.linkedAccount.update({
-                where: { linked_account_id: existingAccount.linked_account_id },
-                data: {
-                    access_token: tokenData.access_token,
-                    refresh_token: tokenData.refresh_token,
-                    token_expires_at: tokenExpiresAt,
-                },
-            });
-        } else {
             await this.linkedAccountsService.create(linkedAccountData);
-        }
 
-        if (isNewUser) {
             const user = await this.prismaService.user.findUnique({
                 where: { user_id: userId },
             });
@@ -217,7 +231,8 @@ export class SpotifyAuthService {    private readonly clientId: string;
             };
         }
 
-        return { success: true, isNewUser: false, needsRoleSelection: false };
+        // This should not happen - either account linking or new user registration
+        throw new UnauthorizedException('Invalid authentication flow');
     }
 
     private async exchangeCodeForTokens(code: string): Promise<any> {
