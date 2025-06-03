@@ -357,28 +357,46 @@ export class SubmissionsService {
         const data = { ...updateSubmissionDto };
         if (updateSubmissionDto.status && !updateSubmissionDto.reviewed_at) {
             data.reviewed_at = new Date();
-        }
-
-        const updatedSubmission = await this.prismaService.submission.update({
+        }        const updatedSubmission = await this.prismaService.submission.update({
             where: { submission_id: id },
             data,
             include: {
                 artist: {
                     select: {
+                        user_id: true,
                         username: true,
                         email: true,
                     },
                 },
                 playlist: {
                     select: {
+                        playlist_id: true,
                         name: true,
+                        description: true,
+                        url: true,
+                        cover_image_url: true,
+                        genre: true,
+                        submission_fee: true,
+                        creator: {
+                            select: {
+                                user_id: true,
+                                username: true,
+                            },
+                        },
                     },
                 },
                 song: {
                     select: {
+                        song_id: true,
                         title: true,
+                        artist_name_on_platform: true,
+                        album_name: true,
+                        url: true,
+                        cover_image_url: true,
+                        duration_ms: true,
                     },
                 },
+                transaction: true,
             },
         });
 
