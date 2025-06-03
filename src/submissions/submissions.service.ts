@@ -63,11 +63,14 @@ export class SubmissionsService {
                             username: true,
                             email: true,
                         },
-                    },
-                    playlist: {
+                    },                    playlist: {
                         select: {
                             playlist_id: true,
                             name: true,
+                            description: true,
+                            url: true,
+                            cover_image_url: true,
+                            genre: true,
                             creator: {
                                 select: {
                                     user_id: true,
@@ -81,8 +84,10 @@ export class SubmissionsService {
                             song_id: true,
                             title: true,
                             artist_name_on_platform: true,
+                            album_name: true,
                             url: true,
                             cover_image_url: true,
+                            duration_ms: true,
                         },
                     },
                 },
@@ -111,14 +116,15 @@ export class SubmissionsService {
                             username: true,
                             email: true,
                         },
-                    },
-                    song: {
+                    },                    song: {
                         select: {
                             song_id: true,
                             title: true,
                             artist_name_on_platform: true,
+                            album_name: true,
                             url: true,
                             cover_image_url: true,
+                            duration_ms: true,
                         },
                     },
                 },
@@ -153,8 +159,7 @@ export class SubmissionsService {
             this.prismaService.submission.findMany({
                 where,
                 skip,
-                take,
-                include: {
+                take,                include: {
                     artist: {
                         select: {
                             user_id: true,
@@ -166,6 +171,10 @@ export class SubmissionsService {
                         select: {
                             playlist_id: true,
                             name: true,
+                            description: true,
+                            url: true,
+                            cover_image_url: true,
+                            genre: true,
                         },
                     },
                     song: {
@@ -173,8 +182,10 @@ export class SubmissionsService {
                             song_id: true,
                             title: true,
                             artist_name_on_platform: true,
+                            album_name: true,
                             url: true,
                             cover_image_url: true,
+                            duration_ms: true,
                         },
                     },
                 },
@@ -184,7 +195,7 @@ export class SubmissionsService {
         ]);
 
         return { data, total, skip, take };
-    } async findOne(id: string) {
+    }    async findOne(id: string) {
         const data = await this.prismaService.submission.findUnique({
             where: { submission_id: id },
             include: {
@@ -199,6 +210,11 @@ export class SubmissionsService {
                     select: {
                         playlist_id: true,
                         name: true,
+                        description: true,
+                        url: true,
+                        cover_image_url: true,
+                        genre: true,
+                        submission_fee: true,
                         creator: {
                             select: {
                                 user_id: true,
@@ -212,8 +228,10 @@ export class SubmissionsService {
                         song_id: true,
                         title: true,
                         artist_name_on_platform: true,
+                        album_name: true,
                         url: true,
                         cover_image_url: true,
+                        duration_ms: true,
                     },
                 },
                 transaction: true,
