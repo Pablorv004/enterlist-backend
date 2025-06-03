@@ -178,7 +178,10 @@ export class UsersService {    constructor(
             GROUP BY DATE_TRUNC('month', t.created_at)
             ORDER BY month DESC
             LIMIT 12
-        `;        // Get most expensive genres
+        `.then((result: any[]) => result.map(row => ({
+            ...row,
+            total_spent: Number(row.total_spent)
+        })));        // Get most expensive genres
         const genreSpending = await this.prismaService.$queryRaw`
             SELECT 
                 p.genre,
@@ -193,7 +196,11 @@ export class UsersService {    constructor(
             GROUP BY p.genre
             ORDER BY total_spent DESC
             LIMIT 10
-        `;
+        `.then((result: any[]) => result.map(row => ({
+            ...row,
+            total_spent: Number(row.total_spent),
+            submission_count: Number(row.submission_count)
+        })));
 
         // Calculate totals
         const totalSubmissions = submissionStats.reduce((sum, stat) => sum + stat._count.submission_id, 0);
@@ -210,13 +217,11 @@ export class UsersService {    constructor(
             _sum: {
                 amount_total: true
             }
-        });
-
-        return {
+        });        return {
             totalSubmissions,
             approvedSubmissions,
             approvalRate: Math.round(approvalRate * 100) / 100,
-            totalSpent: totalSpent._sum.amount_total || 0,
+            totalSpent: Number(totalSpent._sum.amount_total || 0),
             submissionsByStatus: submissionStats.map(stat => ({
                 status: stat.status,
                 count: stat._count.submission_id
@@ -252,7 +257,10 @@ export class UsersService {    constructor(
             GROUP BY DATE_TRUNC('month', t.created_at)
             ORDER BY month DESC
             LIMIT 12
-        `;
+        `.then((result: any[]) => result.map(row => ({
+            ...row,
+            total_earned: Number(row.total_earned)
+        })));
 
         // Get submissions by playlist
         const submissionsByPlaylist = await this.prismaService.playlist.findMany({
@@ -303,13 +311,11 @@ export class UsersService {    constructor(
             }
         });
 
-        const totalSubmissions = submissionStats.reduce((sum, stat) => sum + stat._count.submission_id, 0);
-
-        return {
+        const totalSubmissions = submissionStats.reduce((sum, stat) => sum + stat._count.submission_id, 0);        return {
             totalPlaylists: playlistStats._count.playlist_id,
             totalTracks: playlistStats._sum.track_count || 0,
             totalSubmissions,
-            totalEarnings: totalEarnings._sum.creator_payout_amount || 0,
+            totalEarnings: Number(totalEarnings._sum.creator_payout_amount || 0),
             submissionsByStatus: submissionStats.map(stat => ({
                 status: stat.status,
                 count: stat._count.submission_id
