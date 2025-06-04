@@ -10,8 +10,8 @@ export class SubmissionsService {
     constructor(
         private readonly prismaService: PrismaService,
         private readonly emailService: EmailService
-    ) { }    async findAll(skip = 0, take = 10, status?: submission_status) {
-        const where = status ? { status, deleted: false } : { 
+    ) { } async findAll(skip = 0, take = 10, status?: submission_status) {
+        const where = status ? { status, deleted: false } : {
             deleted: false,
             status: { not: submission_status.processing } // Exclude processing submissions from public queries
         };
@@ -51,9 +51,9 @@ export class SubmissionsService {
         ]);
 
         return { data, total, skip, take };
-    }    async findByArtist(artistId: string, skip = 0, take = 10) {
-        const where = { 
-            artist_id: artistId, 
+    } async findByArtist(artistId: string, skip = 0, take = 10) {
+        const where = {
+            artist_id: artistId,
             deleted: false,
             status: { not: submission_status.processing } // Exclude processing submissions from artist queries
         };
@@ -70,7 +70,7 @@ export class SubmissionsService {
                             username: true,
                             email: true,
                         },
-                    },                    playlist: {
+                    }, playlist: {
                         select: {
                             playlist_id: true,
                             name: true,
@@ -104,7 +104,7 @@ export class SubmissionsService {
         ]);
 
         return { data, total, skip, take };
-    }    async findByPlaylist(playlistId: string, skip = 0, take = 10, status?: submission_status) {
+    } async findByPlaylist(playlistId: string, skip = 0, take = 10, status?: submission_status) {
         const where = {
             playlist_id: playlistId,
             deleted: false,
@@ -123,7 +123,7 @@ export class SubmissionsService {
                             username: true,
                             email: true,
                         },
-                    },                    song: {
+                    }, song: {
                         select: {
                             song_id: true,
                             title: true,
@@ -141,7 +141,7 @@ export class SubmissionsService {
         ]);
 
         return { data, total, skip, take };
-    }    async findByCreator(creatorId: string, skip = 0, take = 10, status?: submission_status, playlistId?: string, artistId?: string) {
+    } async findByCreator(creatorId: string, skip = 0, take = 10, status?: submission_status, playlistId?: string, artistId?: string) {
         const where: any = {
             playlist: { creator_id: creatorId },
             deleted: false
@@ -168,7 +168,7 @@ export class SubmissionsService {
             this.prismaService.submission.findMany({
                 where,
                 skip,
-                take,                include: {
+                take, include: {
                     artist: {
                         select: {
                             user_id: true,
@@ -204,7 +204,7 @@ export class SubmissionsService {
         ]);
 
         return { data, total, skip, take };
-    }    async findOne(id: string) {
+    } async findOne(id: string) {
         const data = await this.prismaService.submission.findUnique({
             where: { submission_id: id },
             include: {
@@ -287,7 +287,8 @@ export class SubmissionsService {
 
         if (song.artist_id !== artist_id && artist.role !== 'admin') {
             throw new ConflictException(`Song does not belong to this artist`);
-        } const existingSubmission = await this.prismaService.submission.findFirst({
+        } 
+        const existingSubmission = await this.prismaService.submission.findFirst({
             where: {
                 artist_id,
                 playlist_id,
@@ -297,10 +298,51 @@ export class SubmissionsService {
         });
 
         if (existingSubmission) {
-            throw new ConflictException(
-                `Submission already exists for this artist, playlist, and song`
-            );
-        }        return this.prismaService.submission.create({
+            // If there's a processing submission, reuse it by updating the submission message and date
+            if (existingSubmission.status === submission_status.processing) {
+                const updatedSubmission = await this.prismaService.submission.update({
+                    where: { submission_id: existingSubmission.submission_id },
+                    data: {
+                        submission_message: createSubmissionDto.submission_message,
+                        submitted_at: new Date(),
+                    },
+                    include: {
+                        artist: {
+                            select: {
+                                username: true,
+                                email: true,
+                            },
+                        },
+                        playlist: {
+                            select: {
+                                name: true,
+                                submission_fee: true,
+                                creator: {
+                                    select: {
+                                        username: true,
+                                        email: true,
+                                    },
+                                },
+                            },
+                        },
+                        song: {
+                            select: {
+                                title: true,
+                                artist_name_on_platform: true,
+                            },
+                        },
+                    },
+                });
+                return updatedSubmission;
+            } else {
+                // If there's a non-processing submission, throw an error
+                throw new ConflictException(
+                    `Submission already exists for this artist, playlist, and song`
+                );
+            }
+        }
+
+        return this.prismaService.submission.create({
             data: {
                 submission_id: uuidv4(),
                 ...createSubmissionDto,
@@ -334,13 +376,13 @@ export class SubmissionsService {
             },
         });
         // Note: Emails will be sent after payment is processed, not during submission creation
-    }async update(id: string, updateSubmissionDto: UpdateSubmissionDto) {
+    } async update(id: string, updateSubmissionDto: UpdateSubmissionDto) {
         const existingSubmission = await this.findOne(id);
 
         const data = { ...updateSubmissionDto };
         if (updateSubmissionDto.status && !updateSubmissionDto.reviewed_at) {
             data.reviewed_at = new Date();
-        }        const updatedSubmission = await this.prismaService.submission.update({
+        } const updatedSubmission = await this.prismaService.submission.update({
             where: { submission_id: id },
             data,
             include: {
@@ -410,7 +452,7 @@ export class SubmissionsService {
                 deleted: true
             },
         });
-    }    async getSubmissionStatsByCreator(creatorId: string) {
+    } async getSubmissionStatsByCreator(creatorId: string) {
         const stats = await this.prismaService.submission.groupBy({
             by: ['playlist_id', 'status'],
             where: {
@@ -587,7 +629,7 @@ export class SubmissionsService {
         // Update submission status to pending for review
         const updatedSubmission = await this.prismaService.submission.update({
             where: { submission_id: submissionId },
-            data: { 
+            data: {
                 status: 'pending' as any,
                 reviewed_at: null
             },
