@@ -10,8 +10,11 @@ export class SubmissionsService {
     constructor(
         private readonly prismaService: PrismaService,
         private readonly emailService: EmailService
-    ) { } async findAll(skip = 0, take = 10, status?: submission_status) {
-        const where = status ? { status, deleted: false } : { deleted: false };
+    ) { }    async findAll(skip = 0, take = 10, status?: submission_status) {
+        const where = status ? { status, deleted: false } : { 
+            deleted: false,
+            status: { not: submission_status.processing } // Exclude processing submissions from public queries
+        };
 
         const [data, total] = await Promise.all([
             this.prismaService.submission.findMany({
@@ -48,8 +51,12 @@ export class SubmissionsService {
         ]);
 
         return { data, total, skip, take };
-    } async findByArtist(artistId: string, skip = 0, take = 10) {
-        const where = { artist_id: artistId, deleted: false };
+    }    async findByArtist(artistId: string, skip = 0, take = 10) {
+        const where = { 
+            artist_id: artistId, 
+            deleted: false,
+            status: { not: submission_status.processing } // Exclude processing submissions from artist queries
+        };
 
         const [data, total] = await Promise.all([
             this.prismaService.submission.findMany({
@@ -97,11 +104,11 @@ export class SubmissionsService {
         ]);
 
         return { data, total, skip, take };
-    } async findByPlaylist(playlistId: string, skip = 0, take = 10, status?: submission_status) {
+    }    async findByPlaylist(playlistId: string, skip = 0, take = 10, status?: submission_status) {
         const where = {
             playlist_id: playlistId,
             deleted: false,
-            ...(status ? { status } : {})
+            ...(status ? { status } : { status: { not: submission_status.processing } }) // Exclude processing unless specifically requested
         };
 
         const [data, total] = await Promise.all([
@@ -134,15 +141,17 @@ export class SubmissionsService {
         ]);
 
         return { data, total, skip, take };
-    } async findByCreator(creatorId: string, skip = 0, take = 10, status?: submission_status, playlistId?: string, artistId?: string) {
+    }    async findByCreator(creatorId: string, skip = 0, take = 10, status?: submission_status, playlistId?: string, artistId?: string) {
         const where: any = {
             playlist: { creator_id: creatorId },
             deleted: false
         };
 
-        // Add status filter if provided
+        // Add status filter if provided, otherwise exclude processing submissions
         if (status) {
             where.status = status;
+        } else {
+            where.status = { not: submission_status.processing }; // Exclude processing submissions from creator queries
         }
 
         // Add playlist filter if provided
@@ -291,11 +300,11 @@ export class SubmissionsService {
             throw new ConflictException(
                 `Submission already exists for this artist, playlist, and song`
             );
-        } return this.prismaService.submission.create({
+        }        return this.prismaService.submission.create({
             data: {
                 submission_id: uuidv4(),
                 ...createSubmissionDto,
-                status: submission_status.pending,
+                status: submission_status.processing,
                 submitted_at: new Date(),
             }, include: {
                 artist: {
@@ -323,35 +332,9 @@ export class SubmissionsService {
                     },
                 },
             },
-        }).then(async (submission) => {
-            // Send email notifications
-            try {                // Send receipt to artist
-                await this.emailService.sendSubmissionReceipt(
-                    submission.artist.email,
-                    submission.artist.username,
-                    submission.song.title,
-                    submission.playlist.name,
-                    submission.playlist.submission_fee.toString(),
-                    submission.submission_id
-                );
-
-                // Send notification to playlist creator
-                await this.emailService.sendSubmissionNotification(
-                    submission.playlist.creator.email,
-                    submission.playlist.creator.username,
-                    submission.song.title,
-                    submission.artist.username,
-                    submission.playlist.name,
-                    submission.submission_id
-                );
-            } catch (emailError) {
-                console.error('Failed to send submission emails:', emailError);
-                // Don't fail the submission if emails fail
-            }
-
-            return submission;
         });
-    } async update(id: string, updateSubmissionDto: UpdateSubmissionDto) {
+        // Note: Emails will be sent after payment is processed, not during submission creation
+    }async update(id: string, updateSubmissionDto: UpdateSubmissionDto) {
         const existingSubmission = await this.findOne(id);
 
         const data = { ...updateSubmissionDto };
@@ -427,21 +410,20 @@ export class SubmissionsService {
                 deleted: true
             },
         });
-    } async getSubmissionStatsByCreator(creatorId: string) {
+    }    async getSubmissionStatsByCreator(creatorId: string) {
         const stats = await this.prismaService.submission.groupBy({
             by: ['playlist_id', 'status'],
             where: {
                 playlist: {
                     creator_id: creatorId
                 },
-                deleted: false
+                deleted: false,
+                status: { not: submission_status.processing } // Exclude processing submissions from stats
             },
             _count: {
                 submission_id: true
             }
-        });
-
-        // Also get total earnings per playlist
+        });        // Also get total earnings per playlist
         const earnings = await this.prismaService.transaction.groupBy({
             by: ['submission_id'],
             where: {
@@ -449,7 +431,8 @@ export class SubmissionsService {
                     playlist: {
                         creator_id: creatorId
                     },
-                    deleted: false
+                    deleted: false,
+                    status: { not: submission_status.processing } // Exclude processing submissions from earnings
                 },
                 status: 'succeeded'
             },
@@ -560,6 +543,109 @@ export class SubmissionsService {
         });
 
         return result;
+    }
+
+    async confirmSubmissionAfterPayment(submissionId: string) {
+        const submission = await this.prismaService.submission.findUnique({
+            where: { submission_id: submissionId },
+            include: {
+                artist: {
+                    select: {
+                        username: true,
+                        email: true,
+                    },
+                },
+                playlist: {
+                    select: {
+                        name: true,
+                        submission_fee: true,
+                        creator: {
+                            select: {
+                                username: true,
+                                email: true,
+                            },
+                        },
+                    },
+                },
+                song: {
+                    select: {
+                        title: true,
+                        artist_name_on_platform: true,
+                    },
+                },
+            },
+        });
+
+        if (!submission) {
+            throw new NotFoundException(`Submission with ID ${submissionId} not found`);
+        }
+
+        if (submission.status !== 'processing') {
+            throw new ConflictException(`Submission is not in processing status`);
+        }
+
+        // Update submission status to pending for review
+        const updatedSubmission = await this.prismaService.submission.update({
+            where: { submission_id: submissionId },
+            data: { 
+                status: 'pending' as any,
+                reviewed_at: null
+            },
+            include: {
+                artist: {
+                    select: {
+                        username: true,
+                        email: true,
+                    },
+                },
+                playlist: {
+                    select: {
+                        name: true,
+                        submission_fee: true,
+                        creator: {
+                            select: {
+                                username: true,
+                                email: true,
+                            },
+                        },
+                    },
+                },
+                song: {
+                    select: {
+                        title: true,
+                        artist_name_on_platform: true,
+                    },
+                },
+            },
+        });
+
+        // Send email notifications now that payment is processed
+        try {
+            // Send receipt to artist
+            await this.emailService.sendSubmissionReceipt(
+                updatedSubmission.artist.email,
+                updatedSubmission.artist.username,
+                updatedSubmission.song.title,
+                updatedSubmission.playlist.name,
+                updatedSubmission.playlist.submission_fee.toString(),
+                updatedSubmission.submission_id
+            );
+
+            // Send notification to playlist creator
+            await this.emailService.sendSubmissionNotification(
+                updatedSubmission.playlist.creator.email,
+                updatedSubmission.playlist.creator.username,
+                updatedSubmission.song.title,
+                updatedSubmission.artist.username,
+                updatedSubmission.playlist.name,
+                updatedSubmission.submission_id
+            );
+        } catch (emailError) {
+            console.error('Failed to send submission emails:', emailError);
+            // Don't fail the confirmation if emails fail
+        }
+
+        return updatedSubmission;
     }
 }
 
