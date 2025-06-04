@@ -35,7 +35,9 @@ export class PlaylistsController {
         @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
     ) {
         return this.playlistsService.findAll(skip, take);
-    }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
+    }    
+    
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'user', userField: 'user_id', paramName: 'creatorId' })
     @Get('creator/:creatorId')
     findByCreator(
@@ -44,7 +46,9 @@ export class PlaylistsController {
         @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
     ) {
         return this.playlistsService.findByCreator(creatorId, skip, take);
-    }@Get(':id')
+    }
+    
+    @Get(':id')
     findOne(@Param('id') id: string) {
         return this.playlistsService.findOne(id);
     }
@@ -52,12 +56,16 @@ export class PlaylistsController {
     @Get(':id/tracks')
     getPlaylistTracks(@Param('id') id: string) {
         return this.playlistsService.getPlaylistTracks(id);
-    }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
+    }    
+    
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     @Roles(user_role.admin)
     @Post()
     create(@Body() createPlaylistDto: CreatePlaylistDto) {
         return this.playlistsService.create(createPlaylistDto);
-    }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
+    }    
+    
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'playlist', userField: 'creator_id' })
     @Put(':id')
     update(
@@ -65,12 +73,16 @@ export class PlaylistsController {
         @Body() updatePlaylistDto: UpdatePlaylistDto,
     ) {
         return this.playlistsService.update(id, updatePlaylistDto);
-    }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
+    }    
+    
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'playlist', userField: 'creator_id' })
     @Delete(':id')
     remove(@Param('id') id: string) {
         return this.playlistsService.remove(id);
-    }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
+    }    
+    
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'playlist', userField: 'creator_id' })
     @Put(':id/submission-fee')
     updateSubmissionFee(
@@ -86,14 +98,18 @@ export class PlaylistsController {
         @Body() body: { genre: string }
     ) {
         return this.playlistsService.update(id, { genre: body.genre });
-    }@Get('platform/:platformId')
+    }
+    
+    @Get('platform/:platformId')
     findByPlatform(
         @Param('platformId', ParseIntPipe) platformId: number,
         @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
         @Query('take', new DefaultValuePipe(50), ParseIntPipe) take: number,
     ) {
         return this.playlistsService.findByPlatform(platformId, skip, take);
-    }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
+    }    
+    
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'user', userField: 'user_id', paramName: 'userId' })
     @Post('sync/:userId')
     syncPlaylists(
