@@ -20,7 +20,8 @@ import { TransactionsModule } from './transactions/transactions.module';
 import { EmailModule } from './email/email.module';
 import { AdminModule } from './admin/admin.module';
 
-@Module({  imports: [
+@Module({
+  imports: [
     ConfigModule,
     PrismaModule,
     AuthModule,

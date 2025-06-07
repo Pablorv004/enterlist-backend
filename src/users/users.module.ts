@@ -4,9 +4,9 @@ import { UsersController } from './users.controller';
 import { EmailModule } from '../email/email.module';
 
 @Module({
-    imports: [EmailModule],
-    controllers: [UsersController],
-    providers: [UsersService],
-    exports: [UsersService],
+  imports: [EmailModule],
+  controllers: [UsersController],
+  providers: [UsersService],
+  exports: [UsersService],
 })
-export class UsersModule { }
+export class UsersModule {}

@@ -1,14 +1,20 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
 @Injectable()
 export class EmailConfirmedGuard implements CanActivate {
-  constructor(
-    private reflector: Reflector,
-  ) {}
+  constructor(private reflector: Reflector) {}
   async canActivate(context: ExecutionContext): Promise<boolean> {
     // Check if the route is marked to skip email confirmation
-    const skipEmailConfirmation = this.reflector.get<boolean>('skipEmailConfirmation', context.getHandler());
+    const skipEmailConfirmation = this.reflector.get<boolean>(
+      'skipEmailConfirmation',
+      context.getHandler(),
+    );
     if (skipEmailConfirmation) {
       return true;
     }
@@ -28,7 +34,9 @@ export class EmailConfirmedGuard implements CanActivate {
 
     // Regular users must have confirmed email
     if (!user.email_confirmed) {
-      throw new ForbiddenException('Please confirm your email address before accessing this feature');
+      throw new ForbiddenException(
+        'Please confirm your email address before accessing this feature',
+      );
     }
 
     return true;

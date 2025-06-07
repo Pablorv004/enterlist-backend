@@ -8,28 +8,28 @@ import { Request } from 'express';
 
 @Controller('api/auth')
 export class AuthController {
-    constructor(private readonly authService: AuthService) { }
+  constructor(private readonly authService: AuthService) {}
 
-    @Post('register')
-    async register(@Body() registerDto: RegisterDto) {
-        return this.authService.register(registerDto);
+  @Post('register')
+  async register(@Body() registerDto: RegisterDto) {
+    return this.authService.register(registerDto);
+  }
+
+  @UseGuards(LocalAuthGuard)
+  @Post('login')
+  async login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @SkipEmailConfirmation()
+  @Get('profile')
+  getProfile(@Req() req: Request) {
+    const user = req.user;
+    if (!user) {
+      throw new Error('Invalid user data in JWT token');
     }
 
-    @UseGuards(LocalAuthGuard)
-    @Post('login')
-    async login(@Body() loginDto: LoginDto) {
-        return this.authService.login(loginDto);
-    }    
-    
-    @UseGuards(JwtAuthGuard)
-    @SkipEmailConfirmation()
-    @Get('profile')
-    getProfile(@Req() req: Request) {
-        const user = req.user;
-        if (!user ) {
-            throw new Error('Invalid user data in JWT token');
-        }
-        
-        return user;
-    }
+    return user;
+  }
 }

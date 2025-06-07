@@ -7,25 +7,27 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
-  
+
   // Configure CORS with specific options for security
   app.enableCors({
     origin: [
-      process.env.FRONTEND_URL, 'http://localhost:5173', 'https://localhost',
+      process.env.FRONTEND_URL,
+      'http://localhost:5173',
+      'https://localhost',
       'https://accounts.spotify.com',
       'https://api.spotify.com',
       'https://accounts.google.com',
       'https://oauth2.googleapis.com',
-      'https://www.googleapis.com'
+      'https://www.googleapis.com',
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-    exposedHeaders: ['Authorization']
+    exposedHeaders: ['Authorization'],
   });
-  
+
   app.useGlobalFilters(new GlobalExceptionFilter());
-  
+
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -33,19 +35,19 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
-  
+
   const config = new DocumentBuilder()
     .setTitle('Enterlist API')
     .setDescription('API for the Enterlist music submission platform')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
-    
+
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
-  
+
   logger.log(`Application is running on: ${await app.getUrl()}`);
   logger.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   logger.log(`Swagger documentation available at: ${await app.getUrl()}/api`);

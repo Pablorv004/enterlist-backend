@@ -5,9 +5,9 @@ import { PaymentMethodsController } from './payment-methods.controller';
 import { PaypalAuthModule } from '../paypal-auth/paypal-auth.module';
 
 @Module({
-    imports: [ConfigModule, PaypalAuthModule],
-    controllers: [PaymentMethodsController],
-    providers: [PaymentMethodsService],
-    exports: [PaymentMethodsService],
+  imports: [ConfigModule, PaypalAuthModule],
+  controllers: [PaymentMethodsController],
+  providers: [PaymentMethodsService],
+  exports: [PaymentMethodsService],
 })
-export class PaymentMethodsModule { }
+export class PaymentMethodsModule {}

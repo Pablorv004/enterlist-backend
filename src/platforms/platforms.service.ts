@@ -1,81 +1,94 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePlatformDto, UpdatePlatformDto } from './dto/platform.dto';
 
 @Injectable()
 export class PlatformsService {
-    constructor(private readonly prismaService: PrismaService) { }    async findAll() {
-        const data = await this.prismaService.platform.findMany({
-            where: {
-                deleted: false
-            }
-        });
-        const total = data.length;
-        return { data, total };
-    }    async findOne(id: number) {
-        const platform = await this.prismaService.platform.findUnique({
-            where: { platform_id: id },
-        });
+  constructor(private readonly prismaService: PrismaService) {}
+  async findAll() {
+    const data = await this.prismaService.platform.findMany({
+      where: {
+        deleted: false,
+      },
+    });
+    const total = data.length;
+    return { data, total };
+  }
+  async findOne(id: number) {
+    const platform = await this.prismaService.platform.findUnique({
+      where: { platform_id: id },
+    });
 
-        if (!platform || platform.deleted) {
-            throw new NotFoundException(`Platform with ID ${id} not found`);
-        }
-
-        return platform;
+    if (!platform || platform.deleted) {
+      throw new NotFoundException(`Platform with ID ${id} not found`);
     }
 
-    async create(createPlatformDto: CreatePlatformDto) {
-        const { name } = createPlatformDto;        const existingPlatform = await this.prismaService.platform.findFirst({
-            where: { name, deleted: false },
-        });
+    return platform;
+  }
 
-        if (existingPlatform) {
-            throw new ConflictException(`Platform with name ${name} already exists`);
-        }
+  async create(createPlatformDto: CreatePlatformDto) {
+    const { name } = createPlatformDto;
+    const existingPlatform = await this.prismaService.platform.findFirst({
+      where: { name, deleted: false },
+    });
 
-        return this.prismaService.platform.create({
-            data: { name },
-        });
+    if (existingPlatform) {
+      throw new ConflictException(`Platform with name ${name} already exists`);
     }
 
-    async update(id: number, updatePlatformDto: UpdatePlatformDto) {
-        await this.findOne(id);
+    return this.prismaService.platform.create({
+      data: { name },
+    });
+  }
 
-        if (updatePlatformDto.name) {            const existingPlatform = await this.prismaService.platform.findFirst({
-                where: {
-                    name: updatePlatformDto.name,
-                    deleted: false,
-                    NOT: { platform_id: id },
-                },
-            });
+  async update(id: number, updatePlatformDto: UpdatePlatformDto) {
+    await this.findOne(id);
 
-            if (existingPlatform) {
-                throw new ConflictException(`Platform with name ${updatePlatformDto.name} already exists`);
-            }
-        }
+    if (updatePlatformDto.name) {
+      const existingPlatform = await this.prismaService.platform.findFirst({
+        where: {
+          name: updatePlatformDto.name,
+          deleted: false,
+          NOT: { platform_id: id },
+        },
+      });
 
-        return this.prismaService.platform.update({
-            where: { platform_id: id },
-            data: updatePlatformDto,
-        });
-    }    async remove(id: number) {
-        await this.findOne(id);
-
-        const linkedResources = await this.prismaService.$transaction([
-            this.prismaService.linkedAccount.findFirst({ where: { platform_id: id } }),
-            this.prismaService.playlist.findFirst({ where: { platform_id: id } }),
-            this.prismaService.song.findFirst({ where: { platform_id: id } }),
-        ]);
-
-        if (linkedResources.some(resource => resource !== null)) {
-            throw new ConflictException(
-                `Cannot delete platform with ID ${id} as it is referenced by other resources`
-            );
-        }
-
-        return this.prismaService.platform.update({
-            where: { platform_id: id },
-            data: { deleted: true },
-        });
+      if (existingPlatform) {
+        throw new ConflictException(
+          `Platform with name ${updatePlatformDto.name} already exists`,
+        );
+      }
     }
+
+    return this.prismaService.platform.update({
+      where: { platform_id: id },
+      data: updatePlatformDto,
+    });
+  }
+  async remove(id: number) {
+    await this.findOne(id);
+
+    const linkedResources = await this.prismaService.$transaction([
+      this.prismaService.linkedAccount.findFirst({
+        where: { platform_id: id },
+      }),
+      this.prismaService.playlist.findFirst({ where: { platform_id: id } }),
+      this.prismaService.song.findFirst({ where: { platform_id: id } }),
+    ]);
+
+    if (linkedResources.some((resource) => resource !== null)) {
+      throw new ConflictException(
+        `Cannot delete platform with ID ${id} as it is referenced by other resources`,
+      );
+    }
+
+    return this.prismaService.platform.update({
+      where: { platform_id: id },
+      data: { deleted: true },
+    });
+  }
 }

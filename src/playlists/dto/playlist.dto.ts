@@ -1,93 +1,92 @@
 import {
-    IsNotEmpty,
-    IsString,
-    IsUUID,
-    IsInt,
-    IsOptional,
-    IsBoolean,
-    IsPositive,
-    IsDecimal
+  IsNotEmpty,
+  IsString,
+  IsUUID,
+  IsInt,
+  IsOptional,
+  IsBoolean,
+  IsPositive,
+  IsDecimal,
 } from 'class-validator';
 
 export class CreatePlaylistDto {
-    @IsUUID()
-    @IsNotEmpty()
-    creator_id: string;
+  @IsUUID()
+  @IsNotEmpty()
+  creator_id: string;
 
-    @IsInt()
-    @IsNotEmpty()
-    platform_id: number;
+  @IsInt()
+  @IsNotEmpty()
+  platform_id: number;
 
-    @IsString()
-    @IsNotEmpty()
-    platform_specific_id: string;
+  @IsString()
+  @IsNotEmpty()
+  platform_specific_id: string;
 
-    @IsString()
-    @IsNotEmpty()
-    name: string;
+  @IsString()
+  @IsNotEmpty()
+  name: string;
 
-    @IsString()
-    @IsOptional()
-    description?: string;
+  @IsString()
+  @IsOptional()
+  description?: string;
 
-    @IsString()
-    @IsOptional()
-    url?: string;
+  @IsString()
+  @IsOptional()
+  url?: string;
 
-    @IsString()
-    @IsOptional()
-    cover_image_url?: string;
+  @IsString()
+  @IsOptional()
+  cover_image_url?: string;
 
-    @IsDecimal()
-    @IsOptional()
-    submission_fee?: number;
+  @IsDecimal()
+  @IsOptional()
+  submission_fee?: number;
 
-    @IsBoolean()
-    @IsOptional()
-    is_visible?: boolean;    @IsString()
-    @IsOptional()
-    genre?: string;
+  @IsBoolean()
+  @IsOptional()
+  is_visible?: boolean;
+  @IsString()
+  @IsOptional()
+  genre?: string;
 
-    @IsInt()
-    @IsOptional()
-    track_count?: number;
-
+  @IsInt()
+  @IsOptional()
+  track_count?: number;
 }
 
 export class UpdatePlaylistDto {
-    @IsString()
-    @IsOptional()
-    name?: string;
+  @IsString()
+  @IsOptional()
+  name?: string;
 
-    @IsString()
-    @IsOptional()
-    description?: string;
+  @IsString()
+  @IsOptional()
+  description?: string;
 
-    @IsString()
-    @IsOptional()
-    url?: string;
+  @IsString()
+  @IsOptional()
+  url?: string;
 
-    @IsString()
-    @IsOptional()
-    cover_image_url?: string;
+  @IsString()
+  @IsOptional()
+  cover_image_url?: string;
 
-    @IsBoolean()
-    @IsOptional()
-    is_visible?: boolean;
+  @IsBoolean()
+  @IsOptional()
+  is_visible?: boolean;
 
-    @IsDecimal()
-    @IsOptional()
-    submission_fee?: number;    @IsString()
-    @IsOptional()
-    genre?: string;
+  @IsDecimal()
+  @IsOptional()
+  submission_fee?: number;
+  @IsString()
+  @IsOptional()
+  genre?: string;
 
-    @IsBoolean()
-    @IsOptional()
-    deleted?: boolean;
+  @IsBoolean()
+  @IsOptional()
+  deleted?: boolean;
 
-    @IsInt()
-    @IsOptional()
-    track_count?: number;
+  @IsInt()
+  @IsOptional()
+  track_count?: number;
 }
-
-

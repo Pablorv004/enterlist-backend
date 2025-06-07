@@ -8,15 +8,15 @@ import { PlatformsModule } from '../platforms/platforms.module';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
-    imports: [
-        HttpModule,
-        ConfigModule,
-        LinkedAccountsModule,
-        PlatformsModule,
-        AuthModule
-    ],
-    controllers: [YoutubeAuthController],
-    providers: [YoutubeAuthService],
-    exports: [YoutubeAuthService],
+  imports: [
+    HttpModule,
+    ConfigModule,
+    LinkedAccountsModule,
+    PlatformsModule,
+    AuthModule,
+  ],
+  controllers: [YoutubeAuthController],
+  providers: [YoutubeAuthService],
+  exports: [YoutubeAuthService],
 })
-export class YoutubeAuthModule { }
+export class YoutubeAuthModule {}

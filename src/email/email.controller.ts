@@ -1,4 +1,14 @@
-import { Controller, Post, Get, Body, Query, UseGuards, Req, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Query,
+  UseGuards,
+  Req,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SkipEmailConfirmation } from '../auth/decorators/skip-email-confirmation.decorator';
 import { EmailService } from './email.service';
@@ -55,7 +65,9 @@ export class EmailController {
     }
 
     if (user.oauth_provider) {
-      throw new BadRequestException('OAuth users do not need email confirmation');
+      throw new BadRequestException(
+        'OAuth users do not need email confirmation',
+      );
     }
 
     // Generate new confirmation token
@@ -70,7 +82,7 @@ export class EmailController {
     await this.emailService.sendEmailConfirmation(
       user.email,
       user.username,
-      confirmationToken
+      confirmationToken,
     );
 
     return { message: 'Confirmation email sent' };
@@ -82,10 +94,10 @@ export class EmailController {
   async getConfirmationStatus(@Req() req) {
     const user = await this.prismaService.user.findUnique({
       where: { user_id: req.user.user_id },
-      select: { 
-        email_confirmed: true, 
+      select: {
+        email_confirmed: true,
         oauth_provider: true,
-        email: true 
+        email: true,
       },
     });
 

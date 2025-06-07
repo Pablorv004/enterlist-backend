@@ -29,17 +29,21 @@ export interface EmailContext {
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter;
-  private readonly frontendUrl: string;  constructor(private configService: ConfigService) {
-    this.frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
-    
+  private readonly frontendUrl: string;
+  constructor(private configService: ConfigService) {
+    this.frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+
     // Only initialize transporter if email credentials are provided
     const emailUser = this.configService.get<string>('EMAIL_USER');
     const emailPass = this.configService.get<string>('EMAIL_PASS');
-    
+
     if (emailUser && emailPass) {
       this.initializeTransporter();
     } else {
-      this.logger.warn('Email credentials not provided. Email service will be disabled.');
+      this.logger.warn(
+        'Email credentials not provided. Email service will be disabled.',
+      );
     }
   }
   private initializeTransporter() {
@@ -50,10 +54,10 @@ export class EmailService {
         secure: this.configService.get<string>('EMAIL_SECURE') === 'true',
         auth: {
           user: this.configService.get<string>('EMAIL_USER'),
-          pass: this.configService.get<string>('EMAIL_PASS')
+          pass: this.configService.get<string>('EMAIL_PASS'),
         },
       });
-      
+
       // Verify connection asynchronously
       this.transporter.verify((error, success) => {
         if (error) {
@@ -69,10 +73,17 @@ export class EmailService {
 
   private getTemplate(templateName: string): string {
     try {
-      const templatePath = path.join(__dirname, 'templates', `${templateName}.hbs`);
+      const templatePath = path.join(
+        __dirname,
+        'templates',
+        `${templateName}.hbs`,
+      );
       return fs.readFileSync(templatePath, 'utf8');
     } catch (error) {
-      this.logger.error(`Failed to load email template: ${templateName}`, error);
+      this.logger.error(
+        `Failed to load email template: ${templateName}`,
+        error,
+      );
       return this.getDefaultTemplate();
     }
   }
@@ -262,22 +273,23 @@ export class EmailService {
   private compileTemplate(templateName: string, context: EmailContext): string {
     const template = this.getTemplate(templateName);
     const compiledTemplate = handlebars.compile(template);
-    
+
     // Add default URLs to context
     const enhancedContext = {
       ...context,
       dashboardUrl: context.dashboardUrl || `${this.frontendUrl}/dashboard`,
       supportUrl: context.supportUrl || `${this.frontendUrl}/support`,
-      unsubscribeUrl: context.unsubscribeUrl || `${this.frontendUrl}/unsubscribe`,
+      unsubscribeUrl:
+        context.unsubscribeUrl || `${this.frontendUrl}/unsubscribe`,
     };
-    
+
     return compiledTemplate(enhancedContext);
   }
   async sendEmail(
     to: string,
     subject: string,
     templateName: string,
-    context: EmailContext
+    context: EmailContext,
   ): Promise<boolean> {
     if (!this.transporter) {
       this.logger.warn('Email transporter not initialized. Cannot send email.');
@@ -286,18 +298,23 @@ export class EmailService {
 
     try {
       const html = this.compileTemplate(templateName, context);
-        const mailOptions = {
+      const mailOptions = {
         from: {
           name: 'Enterlist',
-          address: this.configService.get<string>('EMAIL_USER') || 'noreply@enterlist.com'
+          address:
+            this.configService.get<string>('EMAIL_USER') ||
+            'noreply@enterlist.com',
         },
         to,
         subject,
         html,
       };
-      
+
       const result = await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Email sent successfully to ${to}`, result?.messageId || 'No message ID');
+      this.logger.log(
+        `Email sent successfully to ${to}`,
+        result?.messageId || 'No message ID',
+      );
       return true;
     } catch (error) {
       this.logger.error(`Failed to send email to ${to}:`, error);
@@ -313,7 +330,7 @@ export class EmailService {
     songTitle: string,
     playlistName: string,
     amount: string,
-    transactionId: string
+    transactionId: string,
   ): Promise<boolean> {
     const context: EmailContext = {
       title: 'Submission Receipt',
@@ -347,14 +364,14 @@ export class EmailService {
         <p>Your submission is now being reviewed by the playlist curator. You'll receive an email notification once the review is complete.</p>
         
         <a href="${this.frontendUrl}/artist/submissions" class="cta-button">View Your Submissions</a>
-      `
+      `,
     };
 
     return this.sendEmail(
       artistEmail,
       'Submission Receipt - Enterlist',
       'default',
-      context
+      context,
     );
   }
 
@@ -364,7 +381,7 @@ export class EmailService {
     songTitle: string,
     artistName: string,
     playlistName: string,
-    submissionId: string
+    submissionId: string,
   ): Promise<boolean> {
     const context: EmailContext = {
       title: 'New Submission to Review',
@@ -394,14 +411,14 @@ export class EmailService {
         <p>Please review the submission and provide your feedback to the artist.</p>
         
         <a href="${this.frontendUrl}/playlist-maker/submissions/${submissionId}" class="cta-button">Review Submission</a>
-      `
+      `,
     };
 
     return this.sendEmail(
       playlistMakerEmail,
       `New Submission: ${songTitle} - Enterlist`,
       'default',
-      context
+      context,
     );
   }
 
@@ -411,11 +428,12 @@ export class EmailService {
     songTitle: string,
     playlistName: string,
     status: 'approved' | 'rejected',
-    feedback?: string
+    feedback?: string,
   ): Promise<boolean> {
     const statusText = status === 'approved' ? 'Approved' : 'Not Selected';
-    const statusClass = status === 'approved' ? 'status-approved' : 'status-rejected';
-    
+    const statusClass =
+      status === 'approved' ? 'status-approved' : 'status-rejected';
+
     const context: EmailContext = {
       title: `Submission ${statusText}`,
       recipientName: artistName,
@@ -441,33 +459,38 @@ export class EmailService {
           </div>
         </div>
         
-        ${feedback ? `
+        ${
+          feedback
+            ? `
         <div class="details-card">
           <div class="detail-label">Feedback from Curator:</div>
           <div style="margin-top: 10px; font-style: italic;">"${feedback}"</div>
         </div>
-        ` : ''}
+        `
+            : ''
+        }
         
-        ${status === 'approved' 
-          ? '<p>Congratulations! Your song has been added to the playlist. Keep creating great music!</p>'
-          : '<p>While this submission wasn\'t selected, don\'t be discouraged. Keep refining your craft and submitting to playlists that match your style.</p>'
+        ${
+          status === 'approved'
+            ? '<p>Congratulations! Your song has been added to the playlist. Keep creating great music!</p>'
+            : "<p>While this submission wasn't selected, don't be discouraged. Keep refining your craft and submitting to playlists that match your style.</p>"
         }
         
         <a href="${this.frontendUrl}/artist/submissions" class="cta-button">View All Submissions</a>
-      `
+      `,
     };
 
     return this.sendEmail(
       artistEmail,
       `Submission ${statusText}: ${songTitle} - Enterlist`,
       'default',
-      context
+      context,
     );
   }
 
   async sendPasswordChangeNotification(
     userEmail: string,
-    userName: string
+    userName: string,
   ): Promise<boolean> {
     const context: EmailContext = {
       title: 'Password Changed Successfully',
@@ -485,23 +508,23 @@ export class EmailService {
         </ul>
         
         <a href="${this.frontendUrl}/login" class="cta-button">Login to Your Account</a>
-      `
+      `,
     };
 
     return this.sendEmail(
       userEmail,
       'Password Changed - Enterlist',
       'default',
-      context
+      context,
     );
   }
   async sendEmailConfirmation(
     userEmail: string,
     userName: string,
-    confirmationToken: string
+    confirmationToken: string,
   ): Promise<boolean> {
     const confirmationUrl = `${this.frontendUrl}/confirm-email-token?token=${confirmationToken}`;
-    
+
     const context: EmailContext = {
       title: 'Confirm Your Email Address',
       recipientName: userName,
@@ -519,14 +542,14 @@ export class EmailService {
         <p>This link will expire in 24 hours for security reasons.</p>
         
         <p>If you didn't create an account with Enterlist, you can safely ignore this email.</p>
-      `
+      `,
     };
 
     return this.sendEmail(
       userEmail,
       'Please Confirm Your Email - Enterlist',
       'default',
-      context
+      context,
     );
   }
 }

@@ -3,8 +3,8 @@ import { LinkedAccountsService } from './linked-accounts.service';
 import { LinkedAccountsController } from './linked-accounts.controller';
 
 @Module({
-    controllers: [LinkedAccountsController],
-    providers: [LinkedAccountsService],
-    exports: [LinkedAccountsService],
+  controllers: [LinkedAccountsController],
+  providers: [LinkedAccountsService],
+  exports: [LinkedAccountsService],
 })
-export class LinkedAccountsModule { }
+export class LinkedAccountsModule {}

@@ -8,15 +8,15 @@ import { PlatformsModule } from '../platforms/platforms.module';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
-    imports: [
-        HttpModule,
-        ConfigModule,
-        LinkedAccountsModule,
-        PlatformsModule,
-        AuthModule
-    ],
-    controllers: [SpotifyAuthController],
-    providers: [SpotifyAuthService],
-    exports: [SpotifyAuthService],
+  imports: [
+    HttpModule,
+    ConfigModule,
+    LinkedAccountsModule,
+    PlatformsModule,
+    AuthModule,
+  ],
+  controllers: [SpotifyAuthController],
+  providers: [SpotifyAuthService],
+  exports: [SpotifyAuthService],
 })
-export class SpotifyAuthModule { }
+export class SpotifyAuthModule {}

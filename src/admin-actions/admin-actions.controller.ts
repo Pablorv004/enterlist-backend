@@ -1,13 +1,13 @@
 import {
-    Controller,
-    Get,
-    Post,
-    Body,
-    Param,
-    UseGuards,
-    Query,
-    ParseIntPipe,
-    DefaultValuePipe,
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  UseGuards,
+  Query,
+  ParseIntPipe,
+  DefaultValuePipe,
 } from '@nestjs/common';
 import { AdminActionsService } from './admin-actions.service';
 import { CreateAdminActionDto } from './dto/admin-action.dto';
@@ -21,42 +21,41 @@ import { user_role } from '@prisma/client';
 @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RolesGuard)
 @Roles(user_role.admin)
 export class AdminActionsController {
-    constructor(private readonly adminActionsService: AdminActionsService) { }
+  constructor(private readonly adminActionsService: AdminActionsService) {}
 
-    @Get()
-    findAll(
-        @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
-        @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
-    ) {
-        return this.adminActionsService.findAll(skip, take);
-    }
+  @Get()
+  findAll(
+    @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
+    @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
+  ) {
+    return this.adminActionsService.findAll(skip, take);
+  }
 
-    @Get('admin/:adminId')
-    findByAdmin(
-        @Param('adminId') adminId: string,
-        @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
-        @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
-    ) {
-        return this.adminActionsService.findByAdmin(adminId, skip, take);
-    }
+  @Get('admin/:adminId')
+  findByAdmin(
+    @Param('adminId') adminId: string,
+    @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
+    @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
+  ) {
+    return this.adminActionsService.findByAdmin(adminId, skip, take);
+  }
 
-    @Get('target/:targetId')
-    findByTarget(
-        @Param('targetId') targetId: string,
-        @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
-        @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
-    ) {
-        return this.adminActionsService.findByTarget(targetId, skip, take);
-    }
+  @Get('target/:targetId')
+  findByTarget(
+    @Param('targetId') targetId: string,
+    @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
+    @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
+  ) {
+    return this.adminActionsService.findByTarget(targetId, skip, take);
+  }
 
-    @Get(':id')
-    findOne(@Param('id') id: string) {
-        return this.adminActionsService.findOne(id);
-    }
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.adminActionsService.findOne(id);
+  }
 
-    @Post()
-    create(@Body() createAdminActionDto: CreateAdminActionDto) {
-        return this.adminActionsService.create(createAdminActionDto);
-    }
+  @Post()
+  create(@Body() createAdminActionDto: CreateAdminActionDto) {
+    return this.adminActionsService.create(createAdminActionDto);
+  }
 }
-
