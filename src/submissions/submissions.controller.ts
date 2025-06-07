@@ -24,7 +24,7 @@ import { user_role, submission_status } from '@prisma/client';
 
 @Controller('api/submissions')
 export class SubmissionsController {
-    constructor(private readonly submissionsService: SubmissionsService) { }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
+    constructor(private readonly submissionsService: SubmissionsService) { } @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard)
     @Get()
     findAll(
         @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
@@ -32,7 +32,9 @@ export class SubmissionsController {
         @Query('status') status?: submission_status,
     ) {
         return this.submissionsService.findAll(skip, take, status);
-    }        @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
+    }
+
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'user', userField: 'user_id', paramName: 'artistId' })
     @Get('artist/:artistId')
     findByArtist(
@@ -45,7 +47,9 @@ export class SubmissionsController {
             return { data: [], total: 0, skip, take };
         }
         return this.submissionsService.findByArtist(artistId, skip, take);
-    }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
+    }
+
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'playlist', userField: 'creator_id', paramName: 'playlistId' })
     @Get('playlist/:playlistId')
     findByPlaylist(
@@ -55,7 +59,9 @@ export class SubmissionsController {
         @Query('status') status?: submission_status,
     ) {
         return this.submissionsService.findByPlaylist(playlistId, skip, take, status);
-    }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
+    }
+
+    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'user', userField: 'user_id', paramName: 'creatorId' })
     @Get('creator/:creatorId')
     findByCreator(
@@ -71,13 +77,13 @@ export class SubmissionsController {
             return { data: [], total: 0, skip, take };
         }
         return this.submissionsService.findByCreator(creatorId, skip, take, status, playlistId, artistId);
-    }@UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
+    } @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'user', userField: 'user_id', paramName: 'creatorId' })
     @Get('stats/creator/:creatorId')
     getSubmissionStatsByCreator(@Param('creatorId') creatorId: string) {
         // Validate the creatorId before proceeding
         if (!creatorId || creatorId === 'undefined') {
-            return { 
+            return {
                 pending: 0,
                 approved: 0,
                 rejected: 0,
@@ -85,12 +91,12 @@ export class SubmissionsController {
             };
         }
         return this.submissionsService.getSubmissionStatsByCreator(creatorId);
-    }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
+    } @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'user', userField: 'user_id', paramName: 'creatorId' })
     @Get('earnings/creator/:creatorId')
     getEarningsStatsByCreator(@Param('creatorId') creatorId: string) {
         if (!creatorId || creatorId === 'undefined') {
-            return { 
+            return {
                 total: 0,
                 lastMonth: 0,
                 lastWeek: 0,
@@ -98,16 +104,16 @@ export class SubmissionsController {
             };
         }
         return this.submissionsService.getEarningsStatsByCreator(creatorId);
-    }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
+    } @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'submission', userField: 'artist_id' })
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.submissionsService.findOne(id);
-    }    @UseGuards(JwtAuthGuard, RoleRequiredGuard, EmailConfirmedGuard)
+    } @UseGuards(JwtAuthGuard, RoleRequiredGuard, EmailConfirmedGuard)
     @Post()
     create(@Body() createSubmissionDto: CreateSubmissionDto) {
         return this.submissionsService.create(createSubmissionDto);
-    }    @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, RolesGuard)
+    } @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, RolesGuard)
     @Roles(user_role.playlist_maker, user_role.admin)
     @Put(':id')
     update(
@@ -115,7 +121,7 @@ export class SubmissionsController {
         @Body() updateSubmissionDto: UpdateSubmissionDto,
     ) {
         return this.submissionsService.update(id, updateSubmissionDto);
-    }      @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, RolesGuard)
+    } @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, RolesGuard)
     @Roles(user_role.playlist_maker, user_role.admin)
     @Put(':id/status')
     updateStatus(
@@ -123,7 +129,7 @@ export class SubmissionsController {
         @Body() updateSubmissionDto: UpdateSubmissionDto,
     ) {
         return this.submissionsService.update(id, updateSubmissionDto);
-    }      @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
+    } @UseGuards(JwtAuthGuard, EmailConfirmedGuard, RoleRequiredGuard, OwnershipGuard)
     @Ownership({ model: 'submission', userField: 'artist_id' })
     @Delete(':id')
     remove(@Param('id') id: string) {

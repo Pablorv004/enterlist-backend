@@ -640,8 +640,7 @@ export class TransactionsService {
                         },
                     },
                 },
-            },
-        });// Update submission status if payment is successful
+            },        });// Update submission status and add balance if payment is successful
         if (executedPayment.state === 'approved') {
             await this.prismaService.submission.update({
                 where: {
@@ -651,8 +650,11 @@ export class TransactionsService {
                     status: submission_status.pending, // Set to pending for review
                 },
             });
+        }
 
-            // Add creator payout amount to playlist maker's balance
+        // Always add creator payout amount to playlist maker's balance when payment is successful
+        // regardless of whether they later approve or reject the submission
+        if (executedPayment.state === 'approved') {
             await this.prismaService.user.update({
                 where: {
                     user_id: updatedTransaction.submission.playlist.creator_id

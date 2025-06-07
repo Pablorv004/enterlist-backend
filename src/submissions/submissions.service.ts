@@ -287,7 +287,7 @@ export class SubmissionsService {
 
         if (song.artist_id !== artist_id && artist.role !== 'admin') {
             throw new ConflictException(`Song does not belong to this artist`);
-        } 
+        }
         const existingSubmission = await this.prismaService.submission.findFirst({
             where: {
                 artist_id,
@@ -500,9 +500,7 @@ export class SubmissionsService {
 
             playlistStats[stat.playlist_id].submissions += stat._count.submission_id;
             playlistStats[stat.playlist_id][stat.status] = stat._count.submission_id;
-        });
-
-        // Process earnings (we'll need to join with submissions to get playlist_id)
+        });        // Process earnings (we'll need to join with submissions to get playlist_id)
         const submissionEarnings = await this.prismaService.submission.findMany({
             where: {
                 playlist: {
@@ -534,15 +532,13 @@ export class SubmissionsService {
     async getEarningsStatsByCreator(creatorId: string) {
         // Get the last 12 months of earnings data
         const twelveMonthsAgo = new Date();
-        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
-
+        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12); 
         const earningsData = await this.prismaService.transaction.findMany({
             where: {
                 submission: {
                     playlist: {
                         creator_id: creatorId
                     },
-                    status: 'approved',
                     deleted: false
                 },
                 status: 'succeeded',
