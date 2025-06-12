@@ -129,8 +129,15 @@ export class TransactionsController {
     @Req() req,
     @Body() body: { submissionId: string; paymentMethodId: string },
   ) {
-    const returnUrl = `${process.env.FRONTEND_URL || 'http://localhost:8100'}/payment/success`;
-    const cancelUrl = `${process.env.FRONTEND_URL || 'http://localhost:8100'}/artist/submissions/new`;
+    const isMobile = req.headers['user-agent']?.includes('Capacitor');
+
+    // Use mobile-specific URLs if request is from a mobile device
+    const baseUrl = isMobile
+      ? 'com.enterlist.app://'
+      : (process.env.FRONTEND_URL || 'http://localhost:8100');
+
+    const returnUrl = `${baseUrl}${isMobile ? '' : '/'}payment/success`;
+    const cancelUrl = `${baseUrl}${isMobile ? '' : '/'}artist/submissions/new`;
 
     return this.transactionsService.processPayPalPayment(
       body.submissionId,

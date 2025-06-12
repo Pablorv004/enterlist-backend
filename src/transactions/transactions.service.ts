@@ -489,16 +489,12 @@ export class TransactionsService {
 
     // Check for existing transactions for this submission to prevent duplicates
     const existingTransaction = await this.prismaService.transaction.findFirst({
-      where: { submission_id: submissionId },
+      where: { submission_id: submissionId, status: transaction_status.succeeded},
     });
 
     if (existingTransaction) {
-      // If there's already a transaction, delete the submission and throw an error
-      await this.prismaService.submission.delete({
-        where: { submission_id: submissionId },
-      });
       throw new ConflictException(
-        'A transaction already exists for this submission',
+        `Transaction already exists for this submission. Please contact support if you believe this is an error.`,
       );
     } // Calculate fees - all payments go to Enterlist first (enterlist@business.com)
     // Later, playlist makers can withdraw their portion of the earnings
