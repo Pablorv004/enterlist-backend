@@ -10,6 +10,7 @@ import {
   UpdateTransactionDto,
 } from './dto/transaction.dto';
 import { PaypalAuthService } from '../paypal-auth/paypal-auth.service';
+import { SubmissionsService } from '../submissions/submissions.service';
 import { v4 as uuidv4 } from 'uuid';
 import {
   transaction_status,
@@ -22,6 +23,7 @@ export class TransactionsService {
   constructor(
     private readonly prismaService: PrismaService,
     private readonly paypalAuthService: PaypalAuthService,
+    private readonly submissionsService: SubmissionsService,
   ) {}
   async findAll(skip = 0, take = 10, status?: transaction_status) {
     const where = status ? { status, deleted: false } : { deleted: false };
@@ -683,14 +685,10 @@ export class TransactionsService {
       },
     }); // Update submission status and add balance if payment is successful
     if (executedPayment.state === 'approved') {
-      await this.prismaService.submission.update({
-        where: {
-          submission_id: transaction.submission_id,
-        },
-        data: {
-          status: submission_status.pending, // Set to pending for review
-        },
-      });
+      // Use the centralized method to confirm submission after payment
+      await this.submissionsService.confirmSubmissionAfterPayment(
+        transaction.submission_id,
+      );
     }
 
     // Always add creator payout amount to playlist maker's balance when payment is successful
@@ -952,15 +950,8 @@ export class TransactionsService {
       },
     });
 
-    // Update submission status to pending for review
-    await this.prismaService.submission.update({
-      where: {
-        submission_id: submissionId,
-      },
-      data: {
-        status: submission_status.pending,
-      },
-    });
+    // Use the centralized method to confirm submission after payment
+    await this.submissionsService.confirmSubmissionAfterPayment(submissionId);
 
     // Add creator payout amount to playlist maker's balance
     await this.prismaService.user.update({
