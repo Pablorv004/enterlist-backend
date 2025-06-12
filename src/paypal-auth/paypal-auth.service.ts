@@ -233,6 +233,7 @@ export class PaypalAuthService {
           refresh_token: tokenData.refresh_token,
           token_expires_at: tokenExpiresAt,
           details: JSON.stringify(paymentMethodDetails),
+          deleted: false,
           updated_at: new Date(),
         },
       });
