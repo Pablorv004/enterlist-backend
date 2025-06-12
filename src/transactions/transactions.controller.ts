@@ -134,11 +134,15 @@ export class TransactionsController {
 
     // Use mobile-specific URLs if request is from a mobile device
     const baseUrl = isMobile
-      ? 'com.enterlist.app://'
+      ? 'com.enterlist.app'
       : (process.env.FRONTEND_URL || 'http://localhost:8080');
 
-    const returnUrl = `${baseUrl}${isMobile ? '' : '/'}payment/success`;
-    const cancelUrl = `${baseUrl}${isMobile ? '' : '/'}artist/submissions/new`;
+    const returnUrl = isMobile 
+      ? `${baseUrl}://payment/success`
+      : `${baseUrl}/payment/success`;
+    const cancelUrl = isMobile 
+      ? `${baseUrl}://artist/submissions/new`
+      : `${baseUrl}/artist/submissions/new`;
 
     return this.transactionsService.processPayPalPayment(
       body.submissionId,
