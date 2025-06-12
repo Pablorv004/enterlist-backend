@@ -546,11 +546,8 @@ export class TransactionsService {
         },
       });
 
-      // Update submission status to pending for review since payment is "complete"
-      await this.prismaService.submission.update({
-        where: { submission_id: submissionId },
-        data: { status: submission_status.pending },
-      });
+      // Use the centralized method to confirm submission after payment (even for free submissions)
+      await this.submissionsService.confirmSubmissionAfterPayment(submissionId);
 
       // Return success response without PayPal payment
       return {
