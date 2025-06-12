@@ -22,7 +22,7 @@ export class SpotifyAuthService {
   private readonly mobileRedirectUri: string;
   private readonly stateMap = new Map<
     string,
-    { userId?: string; expiresAt: Date; isNewUser?: boolean }
+    { userId?: string; expiresAt: Date; isNewUser?: boolean; isMobile?: boolean }
   >();
 
   constructor(
@@ -61,6 +61,7 @@ export class SpotifyAuthService {
       userId,
       expiresAt,
       isNewUser: !userId,
+      isMobile,
     });
 
     // Clean up expired states
@@ -102,11 +103,12 @@ export class SpotifyAuthService {
     }
 
     const isNewUser = stateData!.isNewUser;
+    const isMobile = stateData!.isMobile;
     let userId = stateData!.userId;
 
     this.stateMap.delete(state);
 
-    const tokenData = await this.exchangeCodeForTokens(code);
+    const tokenData = await this.exchangeCodeForTokens(code, isMobile);
 
     const profile = await this.getSpotifyUserProfile(tokenData.access_token);
 
@@ -257,11 +259,12 @@ export class SpotifyAuthService {
     throw new UnauthorizedException('Invalid authentication flow');
   }
 
-  private async exchangeCodeForTokens(code: string): Promise<any> {
+  private async exchangeCodeForTokens(code: string, isMobile?: boolean): Promise<any> {
+    const redirectUri = isMobile ? this.mobileRedirectUri : this.redirectUri;
     const params = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
-      redirect_uri: this.redirectUri,
+      redirect_uri: redirectUri,
     });
 
     const headers = {

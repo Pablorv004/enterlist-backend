@@ -117,7 +117,6 @@ export class YoutubeAuthController {
       );
     }
   }
-
   @Get('mobile-callback')
   async mobileCallback(
     @Query('code') code: string,
@@ -135,18 +134,33 @@ export class YoutubeAuthController {
     try {
       const result = await this.youtubeAuthService.handleCallback(code, state);
 
-      const params = new URLSearchParams({
-        access_token: result.access_token,
-        user: JSON.stringify(result.user),
-        status: 'success',
-        provider: 'youtube',
-        isNewUser: result.isNewUser?.toString() || 'false',
-        needsRoleSelection: result.needsRoleSelection?.toString() || 'false',
-      });
+      // Check if this is a login/registration flow (has access_token) or account linking (no access_token)
+      if (result.access_token) {
+        // Login/registration flow - redirect with auth parameters
+        const params = new URLSearchParams({
+          access_token: result.access_token,
+          user: JSON.stringify(result.user),
+          status: 'success',
+          provider: 'youtube',
+          isNewUser: result.isNewUser?.toString() || 'false',
+          needsRoleSelection: result.needsRoleSelection?.toString() || 'false',
+        });
 
-      return res.redirect(
-        `com.enterlist.app://oauth/callback?${params.toString()}`,
-      );
+        return res.redirect(
+          `com.enterlist.app://oauth/callback?${params.toString()}`,
+        );
+      } else {
+        // Account linking flow - redirect with success status only
+        const params = new URLSearchParams({
+          status: 'success',
+          provider: 'youtube',
+          linkedAccount: 'true',
+        });
+
+        return res.redirect(
+          `com.enterlist.app://oauth/callback?${params.toString()}`,
+        );
+      }
     } catch (err) {
       console.error('YouTube Mobile OAuth Error:', err);
       const errorMessage = err.message || 'Authentication failed';

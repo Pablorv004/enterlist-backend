@@ -59,7 +59,7 @@ export class PaypalAuthController {
     if (error) {
       if (isMobile) {
         return res.redirect(
-          `enterlist://oauth/error?error=${encodeURIComponent(error)}`,
+          `com.enterlist.app://oauth/error?error=${encodeURIComponent(error)}`,
         );
       }
       if (isPopup) {
@@ -116,7 +116,7 @@ export class PaypalAuthController {
           isNewUser: result.isNewUser?.toString() || 'false',
           needsRoleSelection: result.needsRoleSelection?.toString() || 'false',
         });
-        return res.redirect(`enterlist://oauth/callback?${params.toString()}`);
+        return res.redirect(`com.enterlist.app://oauth/callback?${params.toString()}`);
       }
       if (isPopup) {
         // For popup, create a special close page that communicates with parent
@@ -187,7 +187,7 @@ export class PaypalAuthController {
     } catch (err) {
       if (isMobile) {
         return res.redirect(
-          `enterlist://oauth/error?error=${encodeURIComponent(err.message)}`,
+          `com.enterlist.app://oauth/error?error=${encodeURIComponent(err.message)}`,
         );
       }
       if (isPopup) {
@@ -298,7 +298,6 @@ export class PaypalAuthController {
       baseUrl: this.paypalAuthService['baseUrl'],
     };
   }
-
   @Get('mobile-callback')
   async mobileCallback(
     @Query('code') code: string,
@@ -311,18 +310,13 @@ export class PaypalAuthController {
       return res.redirect(
         `com.enterlist.app://oauth/error?error=${encodeURIComponent(error)}&provider=paypal`,
       );
-    }
-
-    try {
+    }    try {
       const result = await this.paypalAuthService.handleCallback(code, state);
 
       const params = new URLSearchParams({
-        access_token: result.access_token,
-        user: JSON.stringify(result.user),
         status: 'success',
         provider: 'paypal',
-        isNewUser: result.isNewUser?.toString() || 'false',
-        needsRoleSelection: result.needsRoleSelection?.toString() || 'false',
+        linkedAccount: 'true',
       });
 
       return res.redirect(

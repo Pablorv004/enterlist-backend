@@ -23,7 +23,7 @@ export class YoutubeAuthService {
   private readonly mobileRedirectUri: string;
   private readonly stateMap = new Map<
     string,
-    { userId?: string; expiresAt: Date; isNewUser?: boolean }
+    { userId?: string; expiresAt: Date; isNewUser?: boolean; isMobile?: boolean }
   >();
 
   constructor(
@@ -62,6 +62,7 @@ export class YoutubeAuthService {
       userId,
       expiresAt,
       isNewUser: !userId,
+      isMobile,
     });
 
     // Clean up expired states
@@ -100,11 +101,12 @@ export class YoutubeAuthService {
     }
 
     const isNewUser = stateData!.isNewUser;
+    const isMobile = stateData!.isMobile;
     let userId = stateData!.userId;
 
     this.stateMap.delete(state);
 
-    const tokenData = await this.exchangeCodeForTokens(code);
+    const tokenData = await this.exchangeCodeForTokens(code, isMobile);
 
     const profile = await this.getUserProfile(tokenData.access_token);
 
@@ -262,12 +264,13 @@ export class YoutubeAuthService {
     throw new UnauthorizedException('Invalid authentication flow');
   }
 
-  private async exchangeCodeForTokens(code: string): Promise<any> {
+  private async exchangeCodeForTokens(code: string, isMobile?: boolean): Promise<any> {
+    const redirectUri = isMobile ? this.mobileRedirectUri : this.redirectUri;
     const params = new URLSearchParams({
       code,
       client_id: this.clientId,
       client_secret: this.clientSecret,
-      redirect_uri: this.redirectUri,
+      redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     });
 

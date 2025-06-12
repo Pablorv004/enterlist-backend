@@ -23,7 +23,7 @@ export class PaypalAuthService {
   private readonly baseUrl: string;
   private readonly stateMap = new Map<
     string,
-    { userId?: string; expiresAt: Date; isNewUser?: boolean; isPopup?: boolean }
+    { userId?: string; expiresAt: Date; isNewUser?: boolean; isPopup?: boolean; isMobile?: boolean }
   >();
   private readonly logger = new Logger(PaypalAuthService.name);
   constructor(
@@ -73,6 +73,7 @@ export class PaypalAuthService {
       expiresAt,
       isNewUser: !userId, // If no userId provided, this is a new user registration
       isPopup,
+      isMobile,
     });
 
     // Clean up expired states
