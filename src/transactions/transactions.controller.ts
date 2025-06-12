@@ -138,7 +138,7 @@ export class TransactionsController {
       : (process.env.FRONTEND_URL || 'http://localhost:8080');
 
     const returnUrl = isMobile 
-      ? `${baseUrl}://payment/success`
+      ? `${baseUrl}://payment/success?submissionId=${body.submissionId}`
       : `${baseUrl}/payment/success`;
     const cancelUrl = isMobile 
       ? `${baseUrl}://artist/submissions/new`
@@ -166,6 +166,22 @@ export class TransactionsController {
     );
   }
 
+  @UseGuards(RoleRequiredGuard)
+  @Roles(user_role.artist)
+  @Get('paypal/payment-details/:submissionId')
+  async getPaymentDetailsBySubmission(
+    @Req() req,
+    @Param('submissionId') submissionId: string,
+    @Query('paymentId') paymentId?: string,
+    @Query('PayerID') payerId?: string,
+  ) {
+    return this.transactionsService.getPaymentDetailsBySubmission(
+      submissionId,
+      paymentId,
+      payerId,
+    );
+  }
+
   // Artist endpoints
   @UseGuards(RoleRequiredGuard)
   @Roles(user_role.artist)
@@ -176,5 +192,17 @@ export class TransactionsController {
     @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
   ) {
     return this.transactionsService.findByArtist(req.user.user_id, skip, take);
+  }
+
+  @UseGuards(RoleRequiredGuard)
+  @Roles(user_role.artist)
+  @Post('paypal/complete-mobile-payment')
+  completeMobilePayPalPayment(
+    @Req() req,
+    @Body() body: { submissionId: string },
+  ) {
+    return this.transactionsService.completeMobilePayPalPayment(
+      body.submissionId,
+    );
   }
 }

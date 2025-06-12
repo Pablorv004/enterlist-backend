@@ -805,4 +805,179 @@ export class TransactionsService {
 
     return { data, total, skip, take };
   }
+
+  async getPaymentDetailsBySubmission(
+    submissionId: string,
+    paymentId?: string,
+    payerId?: string,
+  ) {
+    // Get the transaction associated with this submission
+    const transaction = await this.prismaService.transaction.findFirst({
+      where: { submission_id: submissionId },
+      include: {
+        submission: {
+          include: {
+            artist: {
+              select: {
+                username: true,
+              },
+            },
+            playlist: {
+              select: {
+                name: true,
+              },
+            },
+            song: {
+              select: {
+                title: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found for this submission');
+    }
+
+    // If PayPal parameters are provided, execute the payment
+    if (paymentId && payerId && transaction.status === transaction_status.pending) {
+      try {
+        const executedPayment = await this.paypalAuthService.executePayment(
+          paymentId,
+          payerId,
+        );
+
+        // Update transaction status
+        await this.prismaService.transaction.update({
+          where: { transaction_id: transaction.transaction_id },
+          data: {
+            status: transaction_status.succeeded,
+            updated_at: new Date(),
+          },
+        });
+
+        // Update submission status to pending for review
+        await this.prismaService.submission.update({
+          where: { submission_id: submissionId },
+          data: { status: submission_status.pending },
+        });
+
+        return {
+          success: true,
+          executed: true,
+          transaction: {
+            ...transaction,
+            status: transaction_status.succeeded,
+          },
+          executedPayment,
+        };
+      } catch (error) {
+        // If execution fails, mark transaction as failed
+        await this.prismaService.transaction.update({
+          where: { transaction_id: transaction.transaction_id },
+          data: {
+            status: transaction_status.failed,
+            updated_at: new Date(),
+          },
+        });
+
+        throw new BadRequestException(`Payment execution failed: ${error.message}`);
+      }
+    }
+
+    // Return transaction details
+    return {
+      success: true,
+      executed: false,
+      transaction,
+    };
+  }
+
+  async completeMobilePayPalPayment(submissionId: string) {
+    // Find the transaction associated with this submission
+    const transaction = await this.prismaService.transaction.findFirst({
+      where: {
+        submission_id: submissionId,
+        status: transaction_status.pending, // Should be in pending status from mobile payment flow
+      },
+      include: {
+        submission: {
+          include: {
+            playlist: {
+              select: {
+                creator_id: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found or already processed');
+    }
+
+    // Update transaction status to succeeded
+    const updatedTransaction = await this.prismaService.transaction.update({
+      where: {
+        transaction_id: transaction.transaction_id,
+      },
+      data: {
+        status: transaction_status.succeeded,
+        updated_at: new Date(),
+      },
+      include: {
+        submission: {
+          include: {
+            artist: {
+              select: {
+                username: true,
+              },
+            },
+            playlist: {
+              select: {
+                name: true,
+                creator_id: true,
+              },
+            },
+            song: {
+              select: {
+                title: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Update submission status to pending for review
+    await this.prismaService.submission.update({
+      where: {
+        submission_id: submissionId,
+      },
+      data: {
+        status: submission_status.pending,
+      },
+    });
+
+    // Add creator payout amount to playlist maker's balance
+    await this.prismaService.user.update({
+      where: {
+        user_id: updatedTransaction.submission.playlist.creator_id,
+      },
+      data: {
+        balance: {
+          increment: updatedTransaction.creator_payout_amount,
+        },
+      },
+    });
+
+    return {
+      success: true,
+      transaction: updatedTransaction,
+      message: 'Mobile PayPal payment completed successfully',
+    };
+  }
 }
