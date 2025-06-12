@@ -128,13 +128,14 @@ export class TransactionsController {
   createPayPalPayment(
     @Req() req,
     @Body() body: { submissionId: string; paymentMethodId: string },
+    @Query('mobile') mobile?: string,
   ) {
-    const isMobile = req.headers['user-agent']?.includes('Capacitor');
+    const isMobile = mobile === 'true' || req.headers['user-agent']?.includes('Capacitor');
 
     // Use mobile-specific URLs if request is from a mobile device
     const baseUrl = isMobile
       ? 'com.enterlist.app://'
-      : (process.env.FRONTEND_URL || 'http://localhost:8100');
+      : (process.env.FRONTEND_URL || 'http://localhost:8080');
 
     const returnUrl = `${baseUrl}${isMobile ? '' : '/'}payment/success`;
     const cancelUrl = `${baseUrl}${isMobile ? '' : '/'}artist/submissions/new`;
